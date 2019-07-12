@@ -20,4 +20,5 @@ MuonIsolationAnalyzer = cms.EDAnalyzer('MuonIsolationAnalyzer',
                                        #verbosity = cms.bool(False),
                                        #dumpSimHits = cms.bool(False),
                                        #dumpRecHits = cms.bool(False)
+                                       muonsTag = cms.untracked.InputTag("muons")
                                    )

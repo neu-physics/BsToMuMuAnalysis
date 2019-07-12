@@ -28,9 +28,15 @@
 #include "FWCore/Framework/interface/MakerMacros.h"
 
 #include "FWCore/ParameterSet/interface/ParameterSet.h"
- #include "FWCore/Utilities/interface/InputTag.h"
- #include "DataFormats/TrackReco/interface/Track.h"
- #include "DataFormats/TrackReco/interface/TrackFwd.h"
+#include "FWCore/Utilities/interface/InputTag.h"
+#include "DataFormats/TrackReco/interface/Track.h"
+#include "DataFormats/TrackReco/interface/TrackFwd.h"
+
+#include "DataFormats/MuonReco/interface/Muon.h"
+#include "DataFormats/MuonReco/interface/MuonFwd.h"
+#include "DataFormats/MuonReco/interface/MuonIsolation.h"
+#include "DataFormats/MuonReco/interface/MuonPFIsolation.h"
+
 //
 // class declaration
 //
@@ -40,8 +46,10 @@
 // from  edm::one::EDAnalyzer<>
 // This will improve performance in multithreaded jobs.
 
+using namespace std;
 
-using reco::TrackCollection;
+//using reco::TrackCollection;
+//using reco::MuonCollection;
 
 class MuonIsolationAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResources>  {
    public:
@@ -57,7 +65,16 @@ class MuonIsolationAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResour
       virtual void endJob() override;
 
       // ----------member data ---------------------------
-      edm::EDGetTokenT<TrackCollection> tracksToken_;  //used to select what tracks to read from configuration file
+  //edm::EDGetTokenT<reco::TrackCollection> tracksToken_;  //used to select what tracks to read from configuration file
+  //edm::Handle<reco::TrackCollection > tracksHandle_;
+      
+      //edm::EDGetTokenT<reco::MuonCollection > muonsToken_;
+      //edm::Handle<reco::MuonCollection > muonsHandle_;
+      edm::EDGetTokenT< std::vector<reco::Track> > tracksToken_;
+      edm::Handle< std::vector<reco::Track> > tracksHandle_;
+      edm::EDGetTokenT< std::vector<reco::Muon> > muonsToken_;
+      edm::Handle< std::vector<reco::Muon> > muonsHandle_;
+
 };
 
 //
@@ -71,10 +88,11 @@ class MuonIsolationAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResour
 //
 // constructors and destructor
 //
-MuonIsolationAnalyzer::MuonIsolationAnalyzer(const edm::ParameterSet& iConfig)
- :
-  tracksToken_(consumes<TrackCollection>(iConfig.getUntrackedParameter<edm::InputTag>("tracksTag")))
-  //tracksToken_(consumes<edm::View<reco::Track> >(iConfig.getUntrackedParameter<edm::InputTag>("tracksTag")))
+MuonIsolationAnalyzer::MuonIsolationAnalyzer(const edm::ParameterSet& iConfig):
+  //tracksToken_(consumes<TrackCollection>(iConfig.getUntrackedParameter<edm::InputTag>("tracksTag"))),
+  //muonsToken_(consumes<MuonCollection>(iConfig.getUntrackedParameter<edm::InputTag>("muonsTag")))
+  tracksToken_(consumes<std::vector<reco::Track> >(iConfig.getUntrackedParameter<edm::InputTag>("tracksTag"))),
+  muonsToken_(consumes<std::vector<reco::Muon> >(iConfig.getUntrackedParameter<edm::InputTag>("muonsTag")))
 {
    //now do what ever initialization is needed
 
@@ -100,15 +118,39 @@ MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
 {
    using namespace edm;
 
-    Handle<TrackCollection> tracks;
-    iEvent.getByToken(tracksToken_, tracks);
-    for(TrackCollection::const_iterator itTrack = tracks->begin();
+   //Handle<TrackCollection> tracks;
+   //iEvent.getByToken(tracksToken_, tracks);
+   
+   //---load tracks
+   iEvent.getByToken(tracksToken_,tracksHandle_);
+   auto tracks = *tracksHandle_.product();
+
+   for(unsigned iTrack = 0; iTrack < tracks.size(); ++iTrack)   {
+     auto track = tracks.at(iTrack);
+     //std::cout << "Track number " << iTrack << " has pT = " << track.pt() << std::endl;
+   }
+
+   //---load muons
+   iEvent.getByToken(muonsToken_, muonsHandle_);
+   auto muons = *muonsHandle_.product();
+
+   for(unsigned iMuon = 0; iMuon < muons.size(); ++iMuon)   {
+     auto muon = muons.at(iMuon);
+     std::cout << "Muon number " << iMuon << " has pT = " << muon.pt() << std::endl;
+     std::cout << "Muon number " << iMuon << " has sum track pT (dR=0.3) isolation = " << muon.isolationR03().sumPt << std::endl;
+     std::cout << "Muon number " << iMuon << " has sum non-PV track pT (dR=0.3) isolation = " << muon.pfIsolationR03().sumPUPt << std::endl;
+   }
+
+   /*
+   for(TrackCollection::const_iterator itTrack = tracks->begin();
         itTrack != tracks->end();
         ++itTrack) {
       // do something with track parameters, e.g, plot the charge.
       // int charge = itTrack->charge();
     }
+   */
 
+   /*
 #ifdef THIS_IS_AN_EVENT_EXAMPLE
    Handle<ExampleData> pIn;
    iEvent.getByLabel("example",pIn);
@@ -118,6 +160,7 @@ MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
    ESHandle<SetupData> pSetup;
    iSetup.get<SetupRecord>().get(pSetup);
 #endif
+   */
 }
 
 
