@@ -37,6 +37,14 @@
 #include "DataFormats/MuonReco/interface/MuonIsolation.h"
 #include "DataFormats/MuonReco/interface/MuonPFIsolation.h"
 
+//#include "DataFormats/PatCandidates/interface/Muon.h"
+//#include "DataFormats/PatCandidates/interface/Isolation.h"
+
+#include "FWCore/ServiceRegistry/interface/Service.h"
+#include "CommonTools/UtilAlgos/interface/TFileService.h"
+
+#include "TH1.h"
+
 //
 // class declaration
 //
@@ -57,7 +65,7 @@ class MuonIsolationAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResour
       ~MuonIsolationAnalyzer();
 
       static void fillDescriptions(edm::ConfigurationDescriptions& descriptions);
-
+      float GetMuonPFRelIso(const reco::Muon&) const;
 
    private:
       virtual void beginJob() override;
@@ -65,8 +73,8 @@ class MuonIsolationAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResour
       virtual void endJob() override;
 
       // ----------member data ---------------------------
-  //edm::EDGetTokenT<reco::TrackCollection> tracksToken_;  //used to select what tracks to read from configuration file
-  //edm::Handle<reco::TrackCollection > tracksHandle_;
+      //edm::EDGetTokenT<reco::TrackCollection> tracksToken_;  //used to select what tracks to read from configuration file
+      //edm::Handle<reco::TrackCollection > tracksHandle_;
       
       //edm::EDGetTokenT<reco::MuonCollection > muonsToken_;
       //edm::Handle<reco::MuonCollection > muonsHandle_;
@@ -74,6 +82,9 @@ class MuonIsolationAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResour
       edm::Handle< std::vector<reco::Track> > tracksHandle_;
       edm::EDGetTokenT< std::vector<reco::Muon> > muonsToken_;
       edm::Handle< std::vector<reco::Muon> > muonsHandle_;
+
+      //---outputs
+      TH1* h_muon_pfRelIso03_;    
 
 };
 
@@ -95,6 +106,9 @@ MuonIsolationAnalyzer::MuonIsolationAnalyzer(const edm::ParameterSet& iConfig):
   muonsToken_(consumes<std::vector<reco::Muon> >(iConfig.getUntrackedParameter<edm::InputTag>("muonsTag")))
 {
    //now do what ever initialization is needed
+
+  //---outputs
+  //edm::Service<TFileService> fs_; 
 
 }
 
@@ -139,6 +153,11 @@ MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
      std::cout << "Muon number " << iMuon << " has pT = " << muon.pt() << std::endl;
      std::cout << "Muon number " << iMuon << " has sum track pT (dR=0.3) isolation = " << muon.isolationR03().sumPt << std::endl;
      std::cout << "Muon number " << iMuon << " has sum non-PV track pT (dR=0.3) isolation = " << muon.pfIsolationR03().sumPUPt << std::endl;
+     float pfRelIso03 = GetMuonPFRelIso( muon );
+     std::cout << "Muon number " << iMuon << " has PFRelIso (R=0.3) = " << pfRelIso03 << std::endl;
+
+     // Fill information about muon PF relIso (R=0.3)
+     h_muon_pfRelIso03_->Fill( pfRelIso03 );
    }
 
    /*
@@ -168,12 +187,30 @@ MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
 void
 MuonIsolationAnalyzer::beginJob()
 {
+  edm::Service<TFileService> fileService;
+  if(!fileService) throw edm::Exception(edm::errors::Configuration, "TFileService is not registered in cfg file");
+
+  h_muon_pfRelIso03_ = fileService->make<TH1F>("h_muon_pfRelIso03", "h_muon_pfRelIso03", 250, 0, 5.0);
 }
 
 // ------------ method called once each job just after ending the event loop  ------------
 void
 MuonIsolationAnalyzer::endJob()
 {
+}
+
+float MuonIsolationAnalyzer::GetMuonPFRelIso(const reco::Muon& iMuon) const
+{
+  float result = 9999; 
+
+  double pfIsoCharged = iMuon.pfIsolationR03().sumChargedHadronPt;
+  double pfIsoNeutral = iMuon.pfIsolationR03().sumNeutralHadronEt + iMuon.pfIsolationR03().sumPhotonEt;
+
+  double pfIsoPUSubtracted = std::max( 0.0, pfIsoNeutral - 0.5*iMuon.pfIsolationR03().sumPUPt );
+
+  result = (pfIsoCharged + pfIsoPUSubtracted)/iMuon.pt();
+  
+  return result;
 }
 
 // ------------ method fills 'descriptions' with the allowed parameters for the module  ------------

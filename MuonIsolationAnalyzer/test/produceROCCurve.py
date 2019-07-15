@@ -5,8 +5,8 @@ process = cms.Process("MuonIsolationAnalyzer")
 process.load("FWCore.MessageService.MessageLogger_cfi")
 
 
-#process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(-1) )
-process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(15) )
+process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(-1) )
+#process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(15) )
 
 process.source = cms.Source("PoolSource",
                             # replace 'myfile.root' with the source file you want to use
@@ -21,6 +21,8 @@ process.source = cms.Source("PoolSource",
 process.load('BsToMuMuAnalysis.MuonIsolationAnalyzer.MuonIsolationAnalyzer_cfi')
 muonIsoAnalyzer = process.MuonIsolationAnalyzer
 
+process.TFileService = cms.Service("TFileService", fileName = cms.string("muonIsolation_output_zmumu.root") )
+#process.TFileService = cms.Service("TFileService", fileName = cms.string("muonIsolation_output_ttbar.root") )
 
 process.runseq = cms.Sequence()
 process.runseq += muonIsoAnalyzer
