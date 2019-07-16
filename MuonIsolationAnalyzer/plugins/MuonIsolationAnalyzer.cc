@@ -37,11 +37,11 @@
 #include "DataFormats/MuonReco/interface/MuonIsolation.h"
 #include "DataFormats/MuonReco/interface/MuonPFIsolation.h"
 
-//#include "DataFormats/PatCandidates/interface/Muon.h"
-//#include "DataFormats/PatCandidates/interface/Isolation.h"
-
 #include "FWCore/ServiceRegistry/interface/Service.h"
 #include "CommonTools/UtilAlgos/interface/TFileService.h"
+
+#include "DataFormats/VertexReco/interface/Vertex.h"
+#include "DataFormats/VertexReco/interface/VertexFwd.h"
 
 #include "TH1.h"
 
@@ -65,7 +65,8 @@ class MuonIsolationAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResour
       ~MuonIsolationAnalyzer();
 
       static void fillDescriptions(edm::ConfigurationDescriptions& descriptions);
-      float GetMuonPFRelIso(const reco::Muon&) const;
+      float getMuonPFRelIso(const reco::Muon&) const;
+      bool  isGoodMuon(const reco::Muon&) const;
 
    private:
       virtual void beginJob() override;
@@ -82,9 +83,14 @@ class MuonIsolationAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResour
       edm::Handle< std::vector<reco::Track> > tracksHandle_;
       edm::EDGetTokenT< std::vector<reco::Muon> > muonsToken_;
       edm::Handle< std::vector<reco::Muon> > muonsHandle_;
+      edm::EDGetTokenT< std::vector<reco::Vertex> > vertexToken_;
+      edm::Handle< std::vector<reco::Vertex> > vertexHandle_;
+
+      reco::Vertex vertex;
 
       //---outputs
       TH1* h_muon_pfRelIso03_;    
+      TH1* h_muon_cutflow_;    
 
 };
 
@@ -103,7 +109,8 @@ MuonIsolationAnalyzer::MuonIsolationAnalyzer(const edm::ParameterSet& iConfig):
   //tracksToken_(consumes<TrackCollection>(iConfig.getUntrackedParameter<edm::InputTag>("tracksTag"))),
   //muonsToken_(consumes<MuonCollection>(iConfig.getUntrackedParameter<edm::InputTag>("muonsTag")))
   tracksToken_(consumes<std::vector<reco::Track> >(iConfig.getUntrackedParameter<edm::InputTag>("tracksTag"))),
-  muonsToken_(consumes<std::vector<reco::Muon> >(iConfig.getUntrackedParameter<edm::InputTag>("muonsTag")))
+  muonsToken_(consumes<std::vector<reco::Muon> >(iConfig.getUntrackedParameter<edm::InputTag>("muonsTag"))),
+  vertexToken_(consumes<std::vector<reco::Vertex> >(iConfig.getUntrackedParameter<edm::InputTag>("vertexTag")))
 {
    //now do what ever initialization is needed
 
@@ -134,8 +141,40 @@ MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
 
    //Handle<TrackCollection> tracks;
    //iEvent.getByToken(tracksToken_, tracks);
+
+   // *** 1. Load vertices
+   iEvent.getByToken(vertexToken_, vertexHandle_);
+   auto vertices = *vertexHandle_.product();
+
+   int numpv=0; int iPV=0;
+   bool firstGoodPV = false;
+   reco::Vertex vertex;
+   if( vertexHandle_.isValid() ){
+     for(unsigned iVertex = 0; iVertex < vertices.size(); ++iVertex)   {
+       auto vtx = vertices.at(iVertex);
+       //for( reco::VertexCollection::const_iterator vtx = vtxs.begin(); vtx!=vtxs.end(); ++vtx ){
+      
+       iPV++;
+       bool isGood = ( !(vtx.isFake()) &&
+		       (vtx.ndof() >= 4.0) &&
+		       (fabs(vtx.z()) <= 24.0) &&
+		       (fabs(vtx.position().Rho()) <= 2.0) 
+		       );
+       
+       if( !isGood ) continue;
+       
+       if( iPV==1 ){
+	 firstGoodPV = true;
+	 //vertex = (*vtx);
+	 vertex = vtx;
+       }
+       numpv++;
+     }
+   }
+   if (firstGoodPV == false) // no good PV found
+     return;
    
-   //---load tracks
+   // *** 2. Load tracks
    iEvent.getByToken(tracksToken_,tracksHandle_);
    auto tracks = *tracksHandle_.product();
 
@@ -144,16 +183,18 @@ MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
      //std::cout << "Track number " << iTrack << " has pT = " << track.pt() << std::endl;
    }
 
-   //---load muons
+   // *** 3. Load muons
    iEvent.getByToken(muonsToken_, muonsHandle_);
    auto muons = *muonsHandle_.product();
 
    for(unsigned iMuon = 0; iMuon < muons.size(); ++iMuon)   {
      auto muon = muons.at(iMuon);
+     if ( !isGoodMuon( muon )) continue;
+
      std::cout << "Muon number " << iMuon << " has pT = " << muon.pt() << std::endl;
      std::cout << "Muon number " << iMuon << " has sum track pT (dR=0.3) isolation = " << muon.isolationR03().sumPt << std::endl;
      std::cout << "Muon number " << iMuon << " has sum non-PV track pT (dR=0.3) isolation = " << muon.pfIsolationR03().sumPUPt << std::endl;
-     float pfRelIso03 = GetMuonPFRelIso( muon );
+     float pfRelIso03 = getMuonPFRelIso( muon );
      std::cout << "Muon number " << iMuon << " has PFRelIso (R=0.3) = " << pfRelIso03 << std::endl;
 
      // Fill information about muon PF relIso (R=0.3)
@@ -191,6 +232,8 @@ MuonIsolationAnalyzer::beginJob()
   if(!fileService) throw edm::Exception(edm::errors::Configuration, "TFileService is not registered in cfg file");
 
   h_muon_pfRelIso03_ = fileService->make<TH1F>("h_muon_pfRelIso03", "h_muon_pfRelIso03", 250, 0, 5.0);
+  h_muon_cutflow_ = fileService->make<TH1D>("h_muon_cutflow", "h_muon_cutflow", 7, 0, 7);
+
 }
 
 // ------------ method called once each job just after ending the event loop  ------------
@@ -199,7 +242,7 @@ MuonIsolationAnalyzer::endJob()
 {
 }
 
-float MuonIsolationAnalyzer::GetMuonPFRelIso(const reco::Muon& iMuon) const
+float MuonIsolationAnalyzer::getMuonPFRelIso(const reco::Muon& iMuon) const
 {
   float result = 9999; 
 
@@ -211,6 +254,45 @@ float MuonIsolationAnalyzer::GetMuonPFRelIso(const reco::Muon& iMuon) const
   result = (pfIsoCharged + pfIsoPUSubtracted)/iMuon.pt();
   
   return result;
+}
+
+
+bool MuonIsolationAnalyzer::isGoodMuon(const reco::Muon& iMuon) const
+{
+  
+  h_muon_cutflow_->Fill("All Muons", 1);
+  // *** 0. pT > 10 GeV ---> may need to change this for Bs->mumu studies, but keep for now to reproduce TDR results
+  if (iMuon.pt() < 10.)
+    return false;
+  h_muon_cutflow_->Fill("pT > 10", 1);
+
+  // *** 1. |eta| < 2.4
+  if ( fabs(iMuon.eta()) > 2.4 )
+    return false;
+  h_muon_cutflow_->Fill("|eta| < 2.4", 1);
+  
+  // *** 2. Loose ID
+  if ( iMuon.passed('CutBasedIdLoose'))//userFloat("CutBasedIdLoose") ) // CutBasedIdLoose, MvaLoose, others?
+    return false;
+  h_muon_cutflow_->Fill("Loose ID", 1);
+
+  // *** just check to make sure muon track available
+  if ( !(iMuon.muonBestTrack().isAvailable()) )
+    return false;
+
+  // *** 3. d0 cut
+  if ( fabs(iMuon.muonBestTrack()->dxy(vertex.position())) > 0.2 )
+    return false;
+  h_muon_cutflow_->Fill("d0 < 0.2 cm", 1);
+
+  // *** 4. z0 cut
+  if ( fabs(iMuon.muonBestTrack()->dz(vertex.position())) > 0.5 )
+    return false;
+  h_muon_cutflow_->Fill("z0 < 0.5 cm", 1);
+  
+
+  return true;
+
 }
 
 // ------------ method fills 'descriptions' with the allowed parameters for the module  ------------
