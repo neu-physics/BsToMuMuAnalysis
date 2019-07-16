@@ -43,6 +43,9 @@
 #include "DataFormats/VertexReco/interface/Vertex.h"
 #include "DataFormats/VertexReco/interface/VertexFwd.h"
 
+#include "DataFormats/HepMCCandidate/interface/GenParticle.h"
+#include "DataFormats/HepMCCandidate/interface/GenParticleFwd.h"
+
 #include "TH1.h"
 
 //
@@ -85,10 +88,15 @@ class MuonIsolationAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResour
       edm::Handle< std::vector<reco::Muon> > muonsHandle_;
       edm::EDGetTokenT< std::vector<reco::Vertex> > vertexToken_;
       edm::Handle< std::vector<reco::Vertex> > vertexHandle_;
+      edm::EDGetTokenT< std::vector<reco::GenParticle> > genToken_;
+      edm::Handle< std::vector<reco::GenParticle> > genHandle_;
 
       reco::Vertex vertex;
+      bool isZmumuSignal_;
+
 
       //---outputs
+      TH1* h_event_cutflow_;    
       TH1* h_muon_pfRelIso03_;    
       TH1* h_muon_cutflow_;    
 
@@ -110,7 +118,9 @@ MuonIsolationAnalyzer::MuonIsolationAnalyzer(const edm::ParameterSet& iConfig):
   //muonsToken_(consumes<MuonCollection>(iConfig.getUntrackedParameter<edm::InputTag>("muonsTag")))
   tracksToken_(consumes<std::vector<reco::Track> >(iConfig.getUntrackedParameter<edm::InputTag>("tracksTag"))),
   muonsToken_(consumes<std::vector<reco::Muon> >(iConfig.getUntrackedParameter<edm::InputTag>("muonsTag"))),
-  vertexToken_(consumes<std::vector<reco::Vertex> >(iConfig.getUntrackedParameter<edm::InputTag>("vertexTag")))
+  vertexToken_(consumes<std::vector<reco::Vertex> >(iConfig.getUntrackedParameter<edm::InputTag>("vertexTag"))),
+  genToken_(consumes<std::vector<reco::GenParticle> >(iConfig.getUntrackedParameter<edm::InputTag>("genTag"))),
+  isZmumuSignal_(iConfig.getParameter<bool>("isZmumuSignal"))
 {
    //now do what ever initialization is needed
 
@@ -141,6 +151,9 @@ MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
 
    //Handle<TrackCollection> tracks;
    //iEvent.getByToken(tracksToken_, tracks);
+
+   // *** 0. Start cutflow
+   h_event_cutflow_->Fill("All Events", 1);
 
    // *** 1. Load vertices
    iEvent.getByToken(vertexToken_, vertexHandle_);
@@ -173,7 +186,8 @@ MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
    }
    if (firstGoodPV == false) // no good PV found
      return;
-   
+   h_event_cutflow_->Fill("Good Vertex", 1);
+
    // *** 2. Load tracks
    iEvent.getByToken(tracksToken_,tracksHandle_);
    auto tracks = *tracksHandle_.product();
@@ -183,9 +197,20 @@ MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
      //std::cout << "Track number " << iTrack << " has pT = " << track.pt() << std::endl;
    }
 
-   // *** 3. Load muons
+   // *** 3. Load generator MC particles
+   iEvent.getByToken(genToken_,genHandle_);
+   auto genParticles = *genHandle_.product();
+
+   for(unsigned iGenParticle = 0; iGenParticle < genParticles.size(); ++iGenParticle)   {
+     auto genParticle = genParticles.at(iGenParticle);
+     //std::cout << "Track number " << iTrack << " has pT = " << track.pt() << std::endl;
+   }
+
+
+   // *** 4. Load muons
    iEvent.getByToken(muonsToken_, muonsHandle_);
    auto muons = *muonsHandle_.product();
+   bool hasGoodMuon = false;
 
    for(unsigned iMuon = 0; iMuon < muons.size(); ++iMuon)   {
      auto muon = muons.at(iMuon);
@@ -199,7 +224,12 @@ MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
 
      // Fill information about muon PF relIso (R=0.3)
      h_muon_pfRelIso03_->Fill( pfRelIso03 );
+     if (hasGoodMuon == false)
+       hasGoodMuon = true;
    }
+
+   if (hasGoodMuon)
+     h_event_cutflow_->Fill(">= 1 Good Muon", 1);
 
    /*
    for(TrackCollection::const_iterator itTrack = tracks->begin();
@@ -230,6 +260,8 @@ MuonIsolationAnalyzer::beginJob()
 {
   edm::Service<TFileService> fileService;
   if(!fileService) throw edm::Exception(edm::errors::Configuration, "TFileService is not registered in cfg file");
+
+  h_event_cutflow_ = fileService->make<TH1D>("h_event_cutflow", "h_event_cutflow", 7, 0, 7);
 
   h_muon_pfRelIso03_ = fileService->make<TH1F>("h_muon_pfRelIso03", "h_muon_pfRelIso03", 250, 0, 5.0);
   h_muon_cutflow_ = fileService->make<TH1D>("h_muon_cutflow", "h_muon_cutflow", 7, 0, 7);

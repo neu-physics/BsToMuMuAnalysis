@@ -4,15 +4,17 @@ process = cms.Process("MuonIsolationAnalyzer")
 
 process.load("FWCore.MessageService.MessageLogger_cfi")
 
+isZmumu = True # boolean for signal/background
 
 process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(-1) )
 #process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(15) )
 
 
 import FWCore.Utilities.FileUtils as FileUtils
-inputDatafileList = FileUtils.loadListFromFile ('MuonIsolationAnalyzer/data/filelists/zmumu_files_xrd.txt') 
-#inputDatafileList = FileUtils.loadListFromFile ('MuonIsolationAnalyzer/data/filelists/ttbar_files_xrd.txt') 
-#inputDatafileList = FileUtils.loadListFromFile ('dataset_fileLists/ttbar_files_xrd.txt') 
+if isZmumu:
+    inputDatafileList = FileUtils.loadListFromFile ('MuonIsolationAnalyzer/data/filelists/zmumu_files_xrd.txt') 
+else:
+    inputDatafileList = FileUtils.loadListFromFile ('MuonIsolationAnalyzer/data/filelists/ttbar_files_xrd.txt') 
 
 process.source = cms.Source("PoolSource",
                             # replace 'myfile.root' with the source file you want to use
@@ -27,9 +29,12 @@ process.source = cms.Source("PoolSource",
 #process.muonIsoAnalyzer = cms.EDAnalyzer('MuonIsolationAnalyzer')
 process.load('BsToMuMuAnalysis.MuonIsolationAnalyzer.MuonIsolationAnalyzer_cfi')
 muonIsoAnalyzer = process.MuonIsolationAnalyzer
+muonIsoAnalyzer.isZmumuSignal = isZmumu
 
-process.TFileService = cms.Service("TFileService", fileName = cms.string("muonIsolation_output_zmumu.root") )
-#process.TFileService = cms.Service("TFileService", fileName = cms.string("muonIsolation_output_ttbar.root") )
+if isZmumu:
+    process.TFileService = cms.Service("TFileService", fileName = cms.string("muonIsolation_output_zmumu.root") )
+else:
+    process.TFileService = cms.Service("TFileService", fileName = cms.string("muonIsolation_output_ttbar.root") )
 
 process.runseq = cms.Sequence()
 process.runseq += muonIsoAnalyzer

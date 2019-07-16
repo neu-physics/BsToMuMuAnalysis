@@ -1,7 +1,7 @@
 import FWCore.ParameterSet.Config as cms
 
 MuonIsolationAnalyzer = cms.EDAnalyzer('MuonIsolationAnalyzer',
-                                       #genParticlesTag = cms.untracked.InputTag("genParticles"),
+                                       genTag = cms.untracked.InputTag("genParticles"),
                                        #simHitsBTLTag = cms.untracked.InputTag("g4SimHits:FastTimerHitsBarrel"),
                                        #recHitsBTLTag = cms.untracked.InputTag("mtdRecHits:FTLBarrel"),
                                        #uncal_recHitsBTLTag = cms.untracked.InputTag("mtdUncalibratedRecHits:FTLBarrel"),
@@ -18,7 +18,7 @@ MuonIsolationAnalyzer = cms.EDAnalyzer('MuonIsolationAnalyzer',
                                        #track_hit_distMax = cms.double(99999.),
                                        #treeName = cms.untracked.string("DumpHits"),
                                        #verbosity = cms.bool(False),
-                                       #dumpSimHits = cms.bool(False),
+                                       isZmumuSignal = cms.bool(False),
                                        #dumpRecHits = cms.bool(False)
                                        muonsTag = cms.untracked.InputTag("muons"),
                                        vertexTag = cms.untracked.InputTag("offlinePrimaryVertices")
