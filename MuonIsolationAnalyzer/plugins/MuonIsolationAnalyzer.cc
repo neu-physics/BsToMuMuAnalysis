@@ -45,6 +45,7 @@
 
 #include "DataFormats/HepMCCandidate/interface/GenParticle.h"
 #include "DataFormats/HepMCCandidate/interface/GenParticleFwd.h"
+#include "DataFormats/Candidate/interface/Candidate.h"
 
 #include "TH1.h"
 
@@ -70,6 +71,9 @@ class MuonIsolationAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResour
       static void fillDescriptions(edm::ConfigurationDescriptions& descriptions);
       float getMuonPFRelIso(const reco::Muon&) const;
       bool  isGoodMuon(const reco::Muon&) const;
+      int   ttbarDecayMode(edm::Handle<std::vector<reco::GenParticle> >& mcParticles);
+      const reco::Candidate * GetObjectJustBeforeDecay( const reco::Candidate * particle );
+      bool WBosonDecaysProperly( const reco::Candidate *W );
 
    private:
       virtual void beginJob() override;
@@ -99,6 +103,7 @@ class MuonIsolationAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResour
       TH1* h_event_cutflow_;    
       TH1* h_muon_pfRelIso03_;    
       TH1* h_muon_cutflow_;    
+      TH1* h_ttbarDecayMode_;    
 
 };
 
@@ -199,13 +204,19 @@ MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
 
    // *** 3. Load generator MC particles
    iEvent.getByToken(genToken_,genHandle_);
-   auto genParticles = *genHandle_.product();
-
+   //auto genParticles = *genHandle_.product();
+   int decayMode = -1;
+   if (!isZmumuSignal_) // background
+     decayMode = ttbarDecayMode( genHandle_ );
+   //decayMode = ttbarDecayMode( genParticles );
+   h_ttbarDecayMode_->Fill( decayMode );
+   
+   /*
    for(unsigned iGenParticle = 0; iGenParticle < genParticles.size(); ++iGenParticle)   {
      auto genParticle = genParticles.at(iGenParticle);
      //std::cout << "Track number " << iTrack << " has pT = " << track.pt() << std::endl;
    }
-
+   */
 
    // *** 4. Load muons
    iEvent.getByToken(muonsToken_, muonsHandle_);
@@ -262,6 +273,7 @@ MuonIsolationAnalyzer::beginJob()
   if(!fileService) throw edm::Exception(edm::errors::Configuration, "TFileService is not registered in cfg file");
 
   h_event_cutflow_ = fileService->make<TH1D>("h_event_cutflow", "h_event_cutflow", 7, 0, 7);
+  h_ttbarDecayMode_ = fileService->make<TH1D>("h_ttbarDecayMode", "h_ttbarDecayMode", 7, 0, 7);
 
   h_muon_pfRelIso03_ = fileService->make<TH1F>("h_muon_pfRelIso03", "h_muon_pfRelIso03", 250, 0, 5.0);
   h_muon_cutflow_ = fileService->make<TH1D>("h_muon_cutflow", "h_muon_cutflow", 7, 0, 7);
@@ -288,6 +300,174 @@ float MuonIsolationAnalyzer::getMuonPFRelIso(const reco::Muon& iMuon) const
   return result;
 }
 
+bool MuonIsolationAnalyzer::WBosonDecaysProperly( const reco::Candidate *W ){ 
+
+  bool up_quark = false ; 
+  bool down_quark = false ; 
+
+  bool up_lepton = false ; 
+  bool down_lepton = false ; 
+
+  for ( unsigned int i = 0 ; i <  W -> numberOfDaughters(); i++ ){
+
+    if( abs( W -> daughter( i ) -> pdgId() ) == 6
+	||  abs( W -> daughter( i ) -> pdgId() ) == 4
+	||  abs( W -> daughter( i ) -> pdgId() ) == 2 ) up_quark = true ; 
+      
+    if( abs( W -> daughter( i ) -> pdgId() ) == 12
+	||  abs( W -> daughter( i ) -> pdgId() ) == 14
+	||  abs( W -> daughter( i ) -> pdgId() ) == 16 ) up_lepton = true ; 
+
+    if( abs( W -> daughter( i ) -> pdgId() ) == 5
+	||  abs( W -> daughter( i ) -> pdgId() ) == 3
+	||  abs( W -> daughter( i ) -> pdgId() ) == 1 ) down_quark = true ;
+
+    if( abs( W -> daughter( i ) -> pdgId() ) == 11
+	||  abs( W -> daughter( i ) -> pdgId() ) == 13
+	||  abs( W -> daughter( i ) -> pdgId() ) == 15 ) down_lepton = true ; 
+
+  }// end for-loop
+  
+  if( up_quark && down_quark ) return true; 
+  if( up_lepton && down_lepton ) return true ; 
+
+  return false; 
+  
+}
+
+const reco::Candidate * MuonIsolationAnalyzer::GetObjectJustBeforeDecay( const reco::Candidate * particle ){
+
+  for ( unsigned int i = 0 ; i <  particle -> numberOfDaughters(); i++ ){
+    if( particle -> daughter( i ) -> pdgId()  ==  particle -> pdgId() ){
+
+      return GetObjectJustBeforeDecay( particle -> daughter (i) );
+
+    } // end if
+  } // end for
+
+  return particle ;
+
+}
+
+int MuonIsolationAnalyzer::ttbarDecayMode(edm::Handle<std::vector<reco::GenParticle> >& genHandle)
+{
+  int decayMode = -1; // 0 == SL electron, 1 == SL muon, 2 == SL tau, 3 == DL, 4 == all had
+  bool processedTopQuark = false;
+  bool processedAntiTopQuark = false;
+
+  /*  auto genParticles = *genHandle_.product();
+   for(unsigned iGenParticle = 0; iGenParticle < genParticles.size(); ++iGenParticle)   {
+     auto genParticle = genParticles.at(iGenParticle);
+  */
+
+  for(size_t iGenParticle=0; iGenParticle<genHandle->size();iGenParticle++){
+    if ( (*genHandle)[iGenParticle].pdgId() == 6 && processedTopQuark == false) { // check top quark
+      const reco::Candidate * genCandidate = &(*genHandle)[iGenParticle] ;
+      genCandidate = GetObjectJustBeforeDecay( genCandidate );
+      processedTopQuark = true;
+      if (genCandidate->numberOfDaughters() == 2) {
+	//std::cout << ", d0.pdgId() = " << genCandidate->daughter(0)->pdgId() << " , d1.pdgId() = " << genCandidate->daughter(1)->pdgId() << std::endl;
+	std::cout << " NOTHING TO SEE HERE" << std::endl;
+      }
+      else
+	std::cout << " top quark DOES NOT HAVE 2 DAUGHTERS BUT IS END OF CHAIN. PANNIC!!!!!!!!!!!!!!!!!" << std::endl;
+    } 
+    if ( (*genHandle)[iGenParticle].pdgId() == -6 && processedAntiTopQuark == false) { // check top quark
+      const reco::Candidate * genCandidate = &(*genHandle)[iGenParticle] ;
+      genCandidate = GetObjectJustBeforeDecay( genCandidate );
+      processedAntiTopQuark = true;
+
+      if (genCandidate->numberOfDaughters() == 2) {
+	for (unsigned int iDaughter = 0; iDaughter < genCandidate->numberOfDaughters(); iDaughter++){
+
+	  if ( fabs(genCandidate->daughter( iDaughter )->pdgId()) == 24) {// W boson
+	    const reco::Candidate * W = genCandidate->daughter(iDaughter);
+	    // =================================================
+	    // (case-1) In some MC, W boson decays but stays (example : W -> u+d+W)
+	    // (case-2) In some MC, W boson decays after some step (example : W->W->u+d)
+	    // (case-3) In other MC, W boson obtains extra particles (example : W->Wee (+/-))
+	    //  In order to handle those cases,
+	    //   - check if the W boson has a pair of expected decay products, otherwise keep following the W boson.
+
+	    //   bool W_boson_decays  = false ;
+	    //   for ( unsigned int i = 0 ; i <  W -> numberOfDaughters(); i++ ){
+	    //     if(       abs( W -> daughter( i ) -> pdgId() ) == 6
+	    //       ||  abs( W -> daughter( i ) -> pdgId() ) == 4
+	    //       ||  abs( W -> daughter( i ) -> pdgId() ) == 2
+	    //       ||  abs( W -> daughter( i ) -> pdgId() ) == 12
+	    //       ||  abs( W -> daughter( i ) -> pdgId() ) == 14
+	    //       ||  abs( W -> daughter( i ) -> pdgId() ) == 16
+	    //       || abs( W -> daughter( i ) -> pdgId() ) == 5
+	    //       ||  abs( W -> daughter( i ) -> pdgId() ) == 3
+	    //       ||  abs( W -> daughter( i ) -> pdgId() ) == 1
+	    //       ||  abs( W -> daughter( i ) -> pdgId() ) == 11
+	    //       ||  abs( W -> daughter( i ) -> pdgId() ) == 13
+	    //       ||  abs( W -> daughter( i ) -> pdgId() ) == 15 ){
+	    //       W_boson_decays = true ;
+	    //       std::cout <<"W boson decays true. pdgid = " << ( W -> daughter( i ) -> pdgId()  ) << std::endl ;
+	    //     } // end if
+	    //   }// end for-loop
+	    //   std::cout <<"test"<< std::endl ;
+	    //   if( ! W_boson_decays ){
+	    //     W = GetObjectJustBeforeDecay( W ) ;
+	    //     std::cout <<"W boson : GetObjectJustBeforeDecay  is called." << std::endl ; 
+	    //     for ( unsigned int i = 0 ; i <  W -> numberOfDaughters(); i++ ){
+	    //       std::cout << "in the loop, the daughters are "<< W -> daughter( i ) -> pdgId() << std::endl ; 
+	    //     }// end for-loop                                                                                                                                                                                                                                                                              
+	    //   }
+
+	    while ( ! WBosonDecaysProperly( W ) ){
+
+	      bool find_next_candidate = false ; 
+	      for ( unsigned int i = 0 ; (! find_next_candidate) && ( i < W -> numberOfDaughters()  ) ; i++ ){
+
+		if( W -> daughter( i ) -> pdgId() == W -> pdgId() ){
+		  find_next_candidate = true ; 
+		  W = W -> daughter( i ) ; 
+		} 
+
+	      }// end for-loop
+	    }
+
+	    int upDaughter_pdgId = 0;
+	    int downDaughter_pdgId = 0;
+
+	    for ( unsigned int i = 0 ; i <  W -> numberOfDaughters(); i++ ){
+	      
+	      if(       abs( W -> daughter( i ) -> pdgId() ) == 6
+			||  abs( W -> daughter( i ) -> pdgId() ) == 4
+			||  abs( W -> daughter( i ) -> pdgId() ) == 2
+			||  abs( W -> daughter( i ) -> pdgId() ) == 12
+			||  abs( W -> daughter( i ) -> pdgId() ) == 14
+			||  abs( W -> daughter( i ) -> pdgId() ) == 16 ){
+		// --- up type
+		upDaughter_pdgId  =  W->daughter( i )->pdgId();
+	      }else if ( abs( W -> daughter( i ) -> pdgId() ) == 5
+			 ||  abs( W -> daughter( i ) -> pdgId() ) == 3
+			 ||  abs( W -> daughter( i ) -> pdgId() ) == 1
+			 ||  abs( W -> daughter( i ) -> pdgId() ) == 11
+			 ||  abs( W -> daughter( i ) -> pdgId() ) == 13
+			 ||  abs( W -> daughter( i ) -> pdgId() ) == 15 ){
+		// --- down type
+		downDaughter_pdgId  =  W->daughter( i )->pdgId();
+	      }
+	      // =================================================
+	      
+	    }  
+	    std::cout << "top W has daughter0 pdgId = " << upDaughter_pdgId << " , daughter1 pdgId = " << downDaughter_pdgId << std::endl;
+	  } // end W boson loop
+	//std::cout << ", d0.pdgId() = " << genCandidate->daughter(0)->pdgId() << " , d1.pdgId() = " << genCandidate->daughter(1)->pdgId() << std::endl;
+	} // end loop on top quark daughters
+      } // if statement requiring two daughters of last top quark
+      else
+	std::cout << " top quark DOES NOT HAVE 2 DAUGHTERS BUT IS END OF CHAIN. PANNIC!!!!!!!!!!!!!!!!!" << std::endl;
+    }
+
+    decayMode = 4;
+  }
+  
+  return decayMode;
+}
 
 bool MuonIsolationAnalyzer::isGoodMuon(const reco::Muon& iMuon) const
 {
@@ -316,12 +496,12 @@ bool MuonIsolationAnalyzer::isGoodMuon(const reco::Muon& iMuon) const
   if ( fabs(iMuon.muonBestTrack()->dxy(vertex.position())) > 0.2 )
     return false;
   h_muon_cutflow_->Fill("d0 < 0.2 cm", 1);
-
+  /*
   // *** 4. z0 cut
   if ( fabs(iMuon.muonBestTrack()->dz(vertex.position())) > 0.5 )
     return false;
   h_muon_cutflow_->Fill("z0 < 0.5 cm", 1);
-  
+  */
 
   return true;
 
