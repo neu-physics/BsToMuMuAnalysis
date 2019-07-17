@@ -46,8 +46,10 @@
 #include "DataFormats/HepMCCandidate/interface/GenParticle.h"
 #include "DataFormats/HepMCCandidate/interface/GenParticleFwd.h"
 #include "DataFormats/Candidate/interface/Candidate.h"
+#include "DataFormats/Math/interface/deltaPhi.h"
 
 #include "TH1.h"
+#include "TH2.h"
 
 //
 // class declaration
@@ -98,13 +100,14 @@ class MuonIsolationAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResour
 
       reco::Vertex vertex;
       bool isZmumuSignal_;
-
+      vector<const reco::Candidate*> promptMuonTruthCandidates_;
 
       //---outputs
       TH1* h_event_cutflow_;    
       TH1* h_muon_pfRelIso03_;    
       TH1* h_muon_cutflow_;    
       TH1* h_ttbarDecayMode_;    
+      TH2* h_ttbarDecayMode_vs_nPromptMuons_;    
 
 };
 
@@ -228,11 +231,10 @@ MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
      auto muon = muons.at(iMuon);
      if ( !isGoodMuon( muon )) continue;
 
-     std::cout << "Muon number " << iMuon << " has pT = " << muon.pt() << std::endl;
-     std::cout << "Muon number " << iMuon << " has sum track pT (dR=0.3) isolation = " << muon.isolationR03().sumPt << std::endl;
-     std::cout << "Muon number " << iMuon << " has sum non-PV track pT (dR=0.3) isolation = " << muon.pfIsolationR03().sumPUPt << std::endl;
      float pfRelIso03 = getMuonPFRelIso( muon );
-     std::cout << "Muon number " << iMuon << " has PFRelIso (R=0.3) = " << pfRelIso03 << std::endl;
+     //std::cout << "Muon number " << iMuon << " has pT = " << muon.pt() << std::endl;
+     //std::cout << "Muon number " << iMuon << " has sum non-PV track pT (dR=0.3) isolation = " << muon.pfIsolationR03().sumPUPt << std::endl;
+     //std::cout << "Muon number " << iMuon << " has PFRelIso (R=0.3) = " << pfRelIso03 << std::endl;
 
      // Fill information about muon PF relIso (R=0.3)
      h_muon_pfRelIso03_->Fill( pfRelIso03 );
@@ -275,6 +277,7 @@ MuonIsolationAnalyzer::beginJob()
 
   h_event_cutflow_ = fileService->make<TH1D>("h_event_cutflow", "h_event_cutflow", 7, 0, 7);
   h_ttbarDecayMode_ = fileService->make<TH1D>("h_ttbarDecayMode", "h_ttbarDecayMode", 7, 0, 7);
+  h_ttbarDecayMode_vs_nPromptMuons_ = fileService->make<TH2D>("h_ttbarDecayMode_vs_nPromptMuons", "h_ttbarDecayMode_vs_nPromptMuons", 7, 0, 7, 4, 0, 4);
 
   h_muon_pfRelIso03_ = fileService->make<TH1F>("h_muon_pfRelIso03", "h_muon_pfRelIso03", 250, 0, 5.0);
   h_muon_cutflow_ = fileService->make<TH1D>("h_muon_cutflow", "h_muon_cutflow", 7, 0, 7);
@@ -438,17 +441,20 @@ int MuonIsolationAnalyzer::ttbarDecayMode(edm::Handle<std::vector<reco::GenParti
   bool processedAntiTopQuark = false;
   int topWDecayMode = -1;
   int antitopWDecayMode = -1;
-  int numberOfPromptMuons = 0;
+  unsigned int numberOfPromptMuons = 0;
+  promptMuonTruthCandidates_ = {};
 
   // *** 1. Loop over MC particles
   for(size_t iGenParticle=0; iGenParticle<genHandle->size();iGenParticle++){
 
-    // prompt muons
-    if ( fabs((*genHandle)[iGenParticle].pdgId()) == 13 && (*genHandle)[iGenParticle].isLastCopy() && (*genHandle)[iGenParticle].status()==1) { // check prompt muons
+    // ** A. Prompt muons
+    if ( fabs((*genHandle)[iGenParticle].pdgId()) == 13 && (*genHandle)[iGenParticle].isPromptFinalState()){
       numberOfPromptMuons++;
+      const reco::Candidate * promptMuon = &(*genHandle)[iGenParticle] ;
+      promptMuonTruthCandidates_.push_back( promptMuon );
     }
 
-    // top quark loop
+    // ** B. Top quark loop
     if ( (*genHandle)[iGenParticle].pdgId() == 6 && processedTopQuark == false) { // check top quark
       const reco::Candidate * genCandidate = &(*genHandle)[iGenParticle] ;
       genCandidate = GetObjectJustBeforeDecay( genCandidate );
@@ -467,7 +473,7 @@ int MuonIsolationAnalyzer::ttbarDecayMode(edm::Handle<std::vector<reco::GenParti
 	std::cout << " top quark DOES NOT HAVE 2 DAUGHTERS BUT IS END OF CHAIN. PANNIC!!!!!!!!!!!!!!!!!" << std::endl;
     } // end top loop
 
-    // antitop quark loop
+    // ** C. Anti-top quark loop
     if ( (*genHandle)[iGenParticle].pdgId() == -6 && processedAntiTopQuark == false) { // check anti-top quark
       const reco::Candidate * genCandidate = &(*genHandle)[iGenParticle] ;
       genCandidate = GetObjectJustBeforeDecay( genCandidate );
@@ -507,8 +513,12 @@ int MuonIsolationAnalyzer::ttbarDecayMode(edm::Handle<std::vector<reco::GenParti
     std::cout << "no idea what happened in W boson classification. both non -1 but no total mode identified" << std::endl;
     decayMode = -1;
   }
+  h_ttbarDecayMode_vs_nPromptMuons_->Fill( decayMode, numberOfPromptMuons );
 
-  std::cout << "ttbar decay mode = " << decayMode << " , number of prompt muons = " << numberOfPromptMuons << std::endl;
+  //std::cout << "ttbar decay mode = " << decayMode << " , number of prompt muons = " << numberOfPromptMuons << " , size of truth indices vector = " << promptMuonTruthIndices_.size() << std::endl;
+  if ( numberOfPromptMuons != promptMuonTruthCandidates_.size())
+    std::cout << "NUMBER OF PROMPT MUONS NOT EQUAL TO NUMBER OF INDICES SAVED.... MISCOUNT SOMEWHERE !!!!!!!!!!!!!!!!!!! " << std::endl;
+
   return decayMode;
 }
 
@@ -545,6 +555,28 @@ bool MuonIsolationAnalyzer::isGoodMuon(const reco::Muon& iMuon) const
     return false;
   h_muon_cutflow_->Fill("z0 < 0.5 cm", 1);
   */
+
+  bool recoMuonMatchedToPromptTruth = false;
+  // *** 5A. accept only prompt muons if Z->mumu signal
+  if (isZmumuSignal_) {
+    std::cout << "i'm a signal muon." << std::endl;
+  }
+  // *** 5B. reject prompt muons if ttbar background
+  else if (!isZmumuSignal_) {
+    for( unsigned int iTruthMuon = 0; iTruthMuon < promptMuonTruthCandidates_.size(); iTruthMuon++){
+      const reco::Candidate * promptTruthMuon = ( promptMuonTruthCandidates_[iTruthMuon]);
+      float Deta = iMuon.eta() - promptTruthMuon->eta();
+      float Dphi = deltaPhi( iMuon.phi(), promptTruthMuon->phi());
+      float DR = sqrt(Deta*Deta+Dphi*Dphi);
+      
+      if (DR < 0.05)
+	recoMuonMatchedToPromptTruth = true;
+    }
+    if (recoMuonMatchedToPromptTruth)
+      return false;
+    h_muon_cutflow_->Fill("Non-prompt Muon", 1);
+    
+  }
 
   return true;
 
