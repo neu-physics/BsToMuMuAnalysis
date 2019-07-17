@@ -74,6 +74,7 @@ class MuonIsolationAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResour
       int   ttbarDecayMode(edm::Handle<std::vector<reco::GenParticle> >& mcParticles);
       const reco::Candidate * GetObjectJustBeforeDecay( const reco::Candidate * particle );
       bool WBosonDecaysProperly( const reco::Candidate *W );
+      int WBosonDecayMode( const reco::Candidate *W );
 
    private:
       virtual void beginJob() override;
@@ -335,6 +336,87 @@ bool MuonIsolationAnalyzer::WBosonDecaysProperly( const reco::Candidate *W ){
   
 }
 
+int MuonIsolationAnalyzer::WBosonDecayMode( const reco::Candidate *W ){
+
+  int upDaughter_pdgId = 0;
+  int downDaughter_pdgId = 0;
+
+  // =================================================
+  // (case-1) In some MC, W boson decays but stays (example : W -> u+d+W)
+  // (case-2) In some MC, W boson decays after some step (example : W->W->u+d)
+  // (case-3) In other MC, W boson obtains extra particles (example : W->Wee (+/-))
+  //  In order to handle those cases,
+  //   - check if the W boson has a pair of expected decay products, otherwise keep following the W boson.
+  
+  //   bool W_boson_decays  = false ;
+  //   for ( unsigned int i = 0 ; i <  W -> numberOfDaughters(); i++ ){
+  //     if(       abs( W -> daughter( i ) -> pdgId() ) == 6
+  //       ||  abs( W -> daughter( i ) -> pdgId() ) == 4
+  //       ||  abs( W -> daughter( i ) -> pdgId() ) == 2
+  //       ||  abs( W -> daughter( i ) -> pdgId() ) == 12
+  //       ||  abs( W -> daughter( i ) -> pdgId() ) == 14
+  //       ||  abs( W -> daughter( i ) -> pdgId() ) == 16
+  //       || abs( W -> daughter( i ) -> pdgId() ) == 5
+  //       ||  abs( W -> daughter( i ) -> pdgId() ) == 3
+  //       ||  abs( W -> daughter( i ) -> pdgId() ) == 1
+  //       ||  abs( W -> daughter( i ) -> pdgId() ) == 11
+  //       ||  abs( W -> daughter( i ) -> pdgId() ) == 13
+  //       ||  abs( W -> daughter( i ) -> pdgId() ) == 15 ){
+  //       W_boson_decays = true ;
+  //       std::cout <<"W boson decays true. pdgid = " << ( W -> daughter( i ) -> pdgId()  ) << std::endl ;
+  //     } // end if
+  //   }// end for-loop
+  //   std::cout <<"test"<< std::endl ;
+  //   if( ! W_boson_decays ){
+  //     W = GetObjectJustBeforeDecay( W ) ;
+  //     std::cout <<"W boson : GetObjectJustBeforeDecay  is called." << std::endl ; 
+  //     for ( unsigned int i = 0 ; i <  W -> numberOfDaughters(); i++ ){
+  //       std::cout << "in the loop, the daughters are "<< W -> daughter( i ) -> pdgId() << std::endl ; 
+  //     }// end for-loop                     
+  //   }
+  
+  while ( ! WBosonDecaysProperly( W ) ){
+    
+    bool find_next_candidate = false ; 
+    for ( unsigned int i = 0 ; (! find_next_candidate) && ( i < W -> numberOfDaughters()  ) ; i++ ){
+      
+      if( W -> daughter( i ) -> pdgId() == W -> pdgId() ){
+	find_next_candidate = true ; 
+	W = W -> daughter( i ) ; 
+      } 
+      
+    }// end for-loop
+  }
+  
+  for ( unsigned int i = 0 ; i <  W -> numberOfDaughters(); i++ ){
+    
+    if(       abs( W -> daughter( i ) -> pdgId() ) == 6
+	      ||  abs( W -> daughter( i ) -> pdgId() ) == 4
+	      ||  abs( W -> daughter( i ) -> pdgId() ) == 2
+	      ||  abs( W -> daughter( i ) -> pdgId() ) == 12
+	      ||  abs( W -> daughter( i ) -> pdgId() ) == 14
+	      ||  abs( W -> daughter( i ) -> pdgId() ) == 16 ){
+      // --- up type
+      upDaughter_pdgId  =  fabs(W->daughter( i )->pdgId());
+    }else if ( abs( W -> daughter( i ) -> pdgId() ) == 5
+	       ||  abs( W -> daughter( i ) -> pdgId() ) == 3
+	       ||  abs( W -> daughter( i ) -> pdgId() ) == 1
+	       ||  abs( W -> daughter( i ) -> pdgId() ) == 11
+	       ||  abs( W -> daughter( i ) -> pdgId() ) == 13
+	       ||  abs( W -> daughter( i ) -> pdgId() ) == 15 ){
+      // --- down type
+      downDaughter_pdgId  =  fabs(W->daughter( i )->pdgId());
+    }
+    // =================================================
+    
+  }  
+  if (0>1)
+    std::cout << "top W has daughter0 pdgId = " << upDaughter_pdgId << " , daughter1 pdgId = " << downDaughter_pdgId << std::endl;
+  
+  return downDaughter_pdgId;
+
+}
+
 const reco::Candidate * MuonIsolationAnalyzer::GetObjectJustBeforeDecay( const reco::Candidate * particle ){
 
   for ( unsigned int i = 0 ; i <  particle -> numberOfDaughters(); i++ ){
@@ -354,25 +436,39 @@ int MuonIsolationAnalyzer::ttbarDecayMode(edm::Handle<std::vector<reco::GenParti
   int decayMode = -1; // 0 == SL electron, 1 == SL muon, 2 == SL tau, 3 == DL, 4 == all had
   bool processedTopQuark = false;
   bool processedAntiTopQuark = false;
+  int topWDecayMode = -1;
+  int antitopWDecayMode = -1;
+  int numberOfPromptMuons = 0;
 
-  /*  auto genParticles = *genHandle_.product();
-   for(unsigned iGenParticle = 0; iGenParticle < genParticles.size(); ++iGenParticle)   {
-     auto genParticle = genParticles.at(iGenParticle);
-  */
-
+  // *** 1. Loop over MC particles
   for(size_t iGenParticle=0; iGenParticle<genHandle->size();iGenParticle++){
+
+    // prompt muons
+    if ( fabs((*genHandle)[iGenParticle].pdgId()) == 13 && (*genHandle)[iGenParticle].isLastCopy() && (*genHandle)[iGenParticle].status()==1) { // check prompt muons
+      numberOfPromptMuons++;
+    }
+
+    // top quark loop
     if ( (*genHandle)[iGenParticle].pdgId() == 6 && processedTopQuark == false) { // check top quark
       const reco::Candidate * genCandidate = &(*genHandle)[iGenParticle] ;
       genCandidate = GetObjectJustBeforeDecay( genCandidate );
       processedTopQuark = true;
       if (genCandidate->numberOfDaughters() == 2) {
-	//std::cout << ", d0.pdgId() = " << genCandidate->daughter(0)->pdgId() << " , d1.pdgId() = " << genCandidate->daughter(1)->pdgId() << std::endl;
-	std::cout << " NOTHING TO SEE HERE" << std::endl;
-      }
+	for (unsigned int iDaughter = 0; iDaughter < genCandidate->numberOfDaughters(); iDaughter++){
+
+	  if ( fabs(genCandidate->daughter( iDaughter )->pdgId()) == 24) {// W boson
+	    const reco::Candidate * W = genCandidate->daughter(iDaughter);
+	    topWDecayMode = WBosonDecayMode( W );
+	  } // end W boson loop
+
+	} // end loop on top quark daughters
+      } // if statement requiring two daughters of last top quark
       else
 	std::cout << " top quark DOES NOT HAVE 2 DAUGHTERS BUT IS END OF CHAIN. PANNIC!!!!!!!!!!!!!!!!!" << std::endl;
-    } 
-    if ( (*genHandle)[iGenParticle].pdgId() == -6 && processedAntiTopQuark == false) { // check top quark
+    } // end top loop
+
+    // antitop quark loop
+    if ( (*genHandle)[iGenParticle].pdgId() == -6 && processedAntiTopQuark == false) { // check anti-top quark
       const reco::Candidate * genCandidate = &(*genHandle)[iGenParticle] ;
       genCandidate = GetObjectJustBeforeDecay( genCandidate );
       processedAntiTopQuark = true;
@@ -382,90 +478,37 @@ int MuonIsolationAnalyzer::ttbarDecayMode(edm::Handle<std::vector<reco::GenParti
 
 	  if ( fabs(genCandidate->daughter( iDaughter )->pdgId()) == 24) {// W boson
 	    const reco::Candidate * W = genCandidate->daughter(iDaughter);
-	    // =================================================
-	    // (case-1) In some MC, W boson decays but stays (example : W -> u+d+W)
-	    // (case-2) In some MC, W boson decays after some step (example : W->W->u+d)
-	    // (case-3) In other MC, W boson obtains extra particles (example : W->Wee (+/-))
-	    //  In order to handle those cases,
-	    //   - check if the W boson has a pair of expected decay products, otherwise keep following the W boson.
-
-	    //   bool W_boson_decays  = false ;
-	    //   for ( unsigned int i = 0 ; i <  W -> numberOfDaughters(); i++ ){
-	    //     if(       abs( W -> daughter( i ) -> pdgId() ) == 6
-	    //       ||  abs( W -> daughter( i ) -> pdgId() ) == 4
-	    //       ||  abs( W -> daughter( i ) -> pdgId() ) == 2
-	    //       ||  abs( W -> daughter( i ) -> pdgId() ) == 12
-	    //       ||  abs( W -> daughter( i ) -> pdgId() ) == 14
-	    //       ||  abs( W -> daughter( i ) -> pdgId() ) == 16
-	    //       || abs( W -> daughter( i ) -> pdgId() ) == 5
-	    //       ||  abs( W -> daughter( i ) -> pdgId() ) == 3
-	    //       ||  abs( W -> daughter( i ) -> pdgId() ) == 1
-	    //       ||  abs( W -> daughter( i ) -> pdgId() ) == 11
-	    //       ||  abs( W -> daughter( i ) -> pdgId() ) == 13
-	    //       ||  abs( W -> daughter( i ) -> pdgId() ) == 15 ){
-	    //       W_boson_decays = true ;
-	    //       std::cout <<"W boson decays true. pdgid = " << ( W -> daughter( i ) -> pdgId()  ) << std::endl ;
-	    //     } // end if
-	    //   }// end for-loop
-	    //   std::cout <<"test"<< std::endl ;
-	    //   if( ! W_boson_decays ){
-	    //     W = GetObjectJustBeforeDecay( W ) ;
-	    //     std::cout <<"W boson : GetObjectJustBeforeDecay  is called." << std::endl ; 
-	    //     for ( unsigned int i = 0 ; i <  W -> numberOfDaughters(); i++ ){
-	    //       std::cout << "in the loop, the daughters are "<< W -> daughter( i ) -> pdgId() << std::endl ; 
-	    //     }// end for-loop                                                                                                                                                                                                                                                                              
-	    //   }
-
-	    while ( ! WBosonDecaysProperly( W ) ){
-
-	      bool find_next_candidate = false ; 
-	      for ( unsigned int i = 0 ; (! find_next_candidate) && ( i < W -> numberOfDaughters()  ) ; i++ ){
-
-		if( W -> daughter( i ) -> pdgId() == W -> pdgId() ){
-		  find_next_candidate = true ; 
-		  W = W -> daughter( i ) ; 
-		} 
-
-	      }// end for-loop
-	    }
-
-	    int upDaughter_pdgId = 0;
-	    int downDaughter_pdgId = 0;
-
-	    for ( unsigned int i = 0 ; i <  W -> numberOfDaughters(); i++ ){
-	      
-	      if(       abs( W -> daughter( i ) -> pdgId() ) == 6
-			||  abs( W -> daughter( i ) -> pdgId() ) == 4
-			||  abs( W -> daughter( i ) -> pdgId() ) == 2
-			||  abs( W -> daughter( i ) -> pdgId() ) == 12
-			||  abs( W -> daughter( i ) -> pdgId() ) == 14
-			||  abs( W -> daughter( i ) -> pdgId() ) == 16 ){
-		// --- up type
-		upDaughter_pdgId  =  W->daughter( i )->pdgId();
-	      }else if ( abs( W -> daughter( i ) -> pdgId() ) == 5
-			 ||  abs( W -> daughter( i ) -> pdgId() ) == 3
-			 ||  abs( W -> daughter( i ) -> pdgId() ) == 1
-			 ||  abs( W -> daughter( i ) -> pdgId() ) == 11
-			 ||  abs( W -> daughter( i ) -> pdgId() ) == 13
-			 ||  abs( W -> daughter( i ) -> pdgId() ) == 15 ){
-		// --- down type
-		downDaughter_pdgId  =  W->daughter( i )->pdgId();
-	      }
-	      // =================================================
-	      
-	    }  
-	    std::cout << "top W has daughter0 pdgId = " << upDaughter_pdgId << " , daughter1 pdgId = " << downDaughter_pdgId << std::endl;
+	    antitopWDecayMode = WBosonDecayMode( W );
 	  } // end W boson loop
-	//std::cout << ", d0.pdgId() = " << genCandidate->daughter(0)->pdgId() << " , d1.pdgId() = " << genCandidate->daughter(1)->pdgId() << std::endl;
-	} // end loop on top quark daughters
-      } // if statement requiring two daughters of last top quark
-      else
-	std::cout << " top quark DOES NOT HAVE 2 DAUGHTERS BUT IS END OF CHAIN. PANNIC!!!!!!!!!!!!!!!!!" << std::endl;
-    }
 
-    decayMode = 4;
+	} // end loop on antitop quark daughters
+      } // if statement requiring two daughters of last antitop quark
+      else
+	std::cout << " anti-top quark DOES NOT HAVE 2 DAUGHTERS BUT IS END OF CHAIN. PANNIC!!!!!!!!!!!!!!!!!" << std::endl;
+    } // end anti-top loop
+  } // end loop over mc particles
+
+  // *** 2. Classify ttbar decay mode
+  if (antitopWDecayMode == -1 || topWDecayMode == -1){
+    std::cout << "One or more W bosons from top quark were not properly classified" << std::endl;
+    decayMode = -11;
   }
-  
+  else if ( (antitopWDecayMode == 11 && topWDecayMode < 10) || (topWDecayMode == 11 && antitopWDecayMode < 10) ) // W->enu, W->had
+    decayMode = 0;
+  else if ( (antitopWDecayMode == 13 && topWDecayMode < 10) || (topWDecayMode == 13 && antitopWDecayMode < 10) ) // W->munu, W->had
+    decayMode = 1;
+  else if ( (antitopWDecayMode == 15 && topWDecayMode < 10) || (topWDecayMode == 15 && antitopWDecayMode < 10) ) // W->taunu, W->had
+    decayMode = 2;
+  else if ( antitopWDecayMode > 10 && topWDecayMode > 10 ) // DL
+    decayMode = 3;
+  else if ( antitopWDecayMode < 10 && topWDecayMode < 10 ) // all-had
+    decayMode = 4;
+  else{
+    std::cout << "no idea what happened in W boson classification. both non -1 but no total mode identified" << std::endl;
+    decayMode = -1;
+  }
+
+  std::cout << "ttbar decay mode = " << decayMode << " , number of prompt muons = " << numberOfPromptMuons << std::endl;
   return decayMode;
 }
 
