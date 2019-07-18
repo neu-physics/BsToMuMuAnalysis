@@ -21,5 +21,6 @@ MuonIsolationAnalyzer = cms.EDAnalyzer('MuonIsolationAnalyzer',
                                        isZmumuSignal = cms.bool(False),
                                        #dumpRecHits = cms.bool(False)
                                        muonsTag = cms.untracked.InputTag("muons"),
-                                       vertexTag = cms.untracked.InputTag("offlinePrimaryVertices")
+                                       vertexTag = cms.untracked.InputTag("offlinePrimaryVertices"),
+                                       pfCandTag = cms.untracked.InputTag("particleFlow")
                                    )
