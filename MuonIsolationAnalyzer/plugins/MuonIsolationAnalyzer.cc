@@ -73,7 +73,8 @@ class MuonIsolationAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResour
       static void fillDescriptions(edm::ConfigurationDescriptions& descriptions);
       float getMuonPFRelIso(const reco::Muon&) const;
       bool  isGoodMuon(const reco::Muon&) const;
-      int   ttbarDecayMode(edm::Handle<std::vector<reco::GenParticle> >& mcParticles);
+      int   ttbarDecayMode(edm::Handle<std::vector<reco::GenParticle> >& genHandle);
+      void  getPromptMuons(edm::Handle<std::vector<reco::GenParticle> >& genHandle);
       const reco::Candidate * GetObjectJustBeforeDecay( const reco::Candidate * particle );
       bool WBosonDecaysProperly( const reco::Candidate *W );
       int WBosonDecayMode( const reco::Candidate *W );
@@ -104,7 +105,8 @@ class MuonIsolationAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResour
 
       //---outputs
       TH1* h_event_cutflow_;    
-      TH1* h_muon_pfRelIso03_;    
+      TH1* h_muon_pfRelIso03_BTL_;    
+      TH1* h_muon_pfRelIso03_ETL_;    
       TH1* h_muon_cutflow_;    
       TH1* h_ttbarDecayMode_;    
       TH2* h_ttbarDecayMode_vs_nPromptMuons_;    
@@ -207,22 +209,18 @@ MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
    }
 
    // *** 3. Load generator MC particles
-   iEvent.getByToken(genToken_,genHandle_);
-   //auto genParticles = *genHandle_.product();
    int decayMode = -1;
-   if (!isZmumuSignal_) // background
+   iEvent.getByToken(genToken_,genHandle_);
+
+   if (!isZmumuSignal_) // background ttbar
      decayMode = ttbarDecayMode( genHandle_ );
-   //decayMode = ttbarDecayMode( genParticles );
+   else // signal Z->mumu
+     getPromptMuons( genHandle_ );
+
    h_ttbarDecayMode_->Fill( decayMode );
    
-   /*
-   for(unsigned iGenParticle = 0; iGenParticle < genParticles.size(); ++iGenParticle)   {
-     auto genParticle = genParticles.at(iGenParticle);
-     //std::cout << "Track number " << iTrack << " has pT = " << track.pt() << std::endl;
-   }
-   */
-
-   // *** 4. Load muons
+   
+   // *** 4. Load reco muons
    iEvent.getByToken(muonsToken_, muonsHandle_);
    auto muons = *muonsHandle_.product();
    bool hasGoodMuon = false;
@@ -237,7 +235,11 @@ MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
      //std::cout << "Muon number " << iMuon << " has PFRelIso (R=0.3) = " << pfRelIso03 << std::endl;
 
      // Fill information about muon PF relIso (R=0.3)
-     h_muon_pfRelIso03_->Fill( pfRelIso03 );
+     if ( fabs(muon.eta()) < 1.5)
+       h_muon_pfRelIso03_BTL_->Fill( pfRelIso03 );
+     else if ( fabs(muon.eta()) > 1.5 && fabs(muon.eta()) < 2.8)
+       h_muon_pfRelIso03_ETL_->Fill( pfRelIso03 );
+
      if (hasGoodMuon == false)
        hasGoodMuon = true;
    }
@@ -279,7 +281,8 @@ MuonIsolationAnalyzer::beginJob()
   h_ttbarDecayMode_ = fileService->make<TH1D>("h_ttbarDecayMode", "h_ttbarDecayMode", 7, 0, 7);
   h_ttbarDecayMode_vs_nPromptMuons_ = fileService->make<TH2D>("h_ttbarDecayMode_vs_nPromptMuons", "h_ttbarDecayMode_vs_nPromptMuons", 7, 0, 7, 4, 0, 4);
 
-  h_muon_pfRelIso03_ = fileService->make<TH1F>("h_muon_pfRelIso03", "h_muon_pfRelIso03", 250, 0, 5.0);
+  h_muon_pfRelIso03_BTL_ = fileService->make<TH1F>("h_muon_pfRelIso03_BTL", "h_muon_pfRelIso03_BTL", 250, 0, 5.0);
+  h_muon_pfRelIso03_ETL_ = fileService->make<TH1F>("h_muon_pfRelIso03_ETL", "h_muon_pfRelIso03_ETL", 250, 0, 5.0);
   h_muon_cutflow_ = fileService->make<TH1D>("h_muon_cutflow", "h_muon_cutflow", 7, 0, 7);
 
 }
@@ -434,6 +437,27 @@ const reco::Candidate * MuonIsolationAnalyzer::GetObjectJustBeforeDecay( const r
 
 }
 
+void MuonIsolationAnalyzer::getPromptMuons(edm::Handle<std::vector<reco::GenParticle> >& genHandle)
+{
+  unsigned int numberOfPromptMuons = 0;
+  promptMuonTruthCandidates_ = {};
+
+  // *** 1. Loop over MC particles
+  for(size_t iGenParticle=0; iGenParticle<genHandle->size();iGenParticle++){
+    
+    // ** A. Prompt muons
+    if ( fabs((*genHandle)[iGenParticle].pdgId()) == 13 && (*genHandle)[iGenParticle].isPromptFinalState()){
+      numberOfPromptMuons++;
+      const reco::Candidate * promptMuon = &(*genHandle)[iGenParticle] ;
+      promptMuonTruthCandidates_.push_back( promptMuon );
+    }
+  }
+  if (numberOfPromptMuons > 2)
+    std::cout << "!!!!!!!!!!!!!!!! PANIC !!!!!! in z->mumu event, # of prompt final state muons = " << numberOfPromptMuons << std::endl;
+  
+  return;
+}
+
 int MuonIsolationAnalyzer::ttbarDecayMode(edm::Handle<std::vector<reco::GenParticle> >& genHandle)
 {
   int decayMode = -1; // 0 == SL electron, 1 == SL muon, 2 == SL tau, 3 == DL, 4 == all had
@@ -526,10 +550,10 @@ bool MuonIsolationAnalyzer::isGoodMuon(const reco::Muon& iMuon) const
 {
   
   h_muon_cutflow_->Fill("All Muons", 1);
-  // *** 0. pT > 10 GeV ---> may need to change this for Bs->mumu studies, but keep for now to reproduce TDR results
-  if (iMuon.pt() < 10.)
+  // *** 0. pT > 20 GeV ---> may need to change this for Bs->mumu studies, but keep for now to reproduce TDR results
+  if (iMuon.pt() < 20.)
     return false;
-  h_muon_cutflow_->Fill("pT > 10", 1);
+  h_muon_cutflow_->Fill("pT > 20", 1);
 
   // *** 1. |eta| < 2.4
   if ( fabs(iMuon.eta()) > 2.4 )
@@ -559,7 +583,18 @@ bool MuonIsolationAnalyzer::isGoodMuon(const reco::Muon& iMuon) const
   bool recoMuonMatchedToPromptTruth = false;
   // *** 5A. accept only prompt muons if Z->mumu signal
   if (isZmumuSignal_) {
-    std::cout << "i'm a signal muon." << std::endl;
+    for( unsigned int iTruthMuon = 0; iTruthMuon < promptMuonTruthCandidates_.size(); iTruthMuon++){
+      const reco::Candidate * promptTruthMuon = ( promptMuonTruthCandidates_[iTruthMuon]);
+      float Deta = iMuon.eta() - promptTruthMuon->eta();
+      float Dphi = deltaPhi( iMuon.phi(), promptTruthMuon->phi());
+      float DR = sqrt(Deta*Deta+Dphi*Dphi);
+      
+      if (DR < 0.05)
+	recoMuonMatchedToPromptTruth = true;
+    }
+    if (!recoMuonMatchedToPromptTruth)
+      return false;
+    h_muon_cutflow_->Fill("Signal Prompt Muon", 1);
   }
   // *** 5B. reject prompt muons if ttbar background
   else if (!isZmumuSignal_) {
@@ -574,7 +609,7 @@ bool MuonIsolationAnalyzer::isGoodMuon(const reco::Muon& iMuon) const
     }
     if (recoMuonMatchedToPromptTruth)
       return false;
-    h_muon_cutflow_->Fill("Non-prompt Muon", 1);
+    h_muon_cutflow_->Fill("Non-prompt Bkg Muon", 1);
     
   }
 
