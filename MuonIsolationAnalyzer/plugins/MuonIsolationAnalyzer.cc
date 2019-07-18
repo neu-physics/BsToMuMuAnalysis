@@ -42,6 +42,7 @@
 
 #include "DataFormats/VertexReco/interface/Vertex.h"
 #include "DataFormats/VertexReco/interface/VertexFwd.h"
+#include "SimDataFormats/Vertex/interface/SimVertex.h"
 
 #include "DataFormats/HepMCCandidate/interface/GenParticle.h"
 #include "DataFormats/HepMCCandidate/interface/GenParticleFwd.h"
@@ -72,6 +73,9 @@ class MuonIsolationAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResour
    public:
       explicit MuonIsolationAnalyzer(const edm::ParameterSet&);
       ~MuonIsolationAnalyzer();
+
+      //typedef ROOT::Math::PositionVector3D<ROOT::Math::Cartesian3D<float>,ROOT::Math::DefaultCoordinateSystemTag> genXYZ;
+      //typedef ROOT::Math::PositionVector3D<ROOT::Math::Cartesian3D<double>, ROOT::Math::DefaultCoordinateSystemTag> Point;
 
       static void fillDescriptions(edm::ConfigurationDescriptions& descriptions);
       float getMuonPFRelIso(const reco::Muon&) const;
@@ -104,6 +108,13 @@ class MuonIsolationAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResour
       edm::Handle< std::vector<reco::GenParticle> > genHandle_;
       edm::EDGetTokenT< std::vector<reco::PFCandidate> > pfCandToken_;
       edm::Handle< std::vector<reco::PFCandidate> > pfCandHandle_;
+      edm::EDGetTokenT<vector<SimVertex> >                 genVertexToken_;
+      edm::Handle<vector<SimVertex> >                      genVertexHandle_;    
+  //edm::EDGetTokenT<genXYZ>                             genXYZToken_;
+  edm::EDGetTokenT< ROOT::Math::PositionVector3D<ROOT::Math::Cartesian3D<float>,ROOT::Math::DefaultCoordinateSystemTag> > genXYZToken_;
+  edm::Handle< ROOT::Math::PositionVector3D<ROOT::Math::Cartesian3D<float>,ROOT::Math::DefaultCoordinateSystemTag> > genXYZHandle_;
+      edm::EDGetTokenT<float>                              genT0Token_;    
+      edm::Handle<float>                                   genT0Handle_;
 
       reco::Vertex vertex;
       bool isZmumuSignal_;
@@ -140,6 +151,10 @@ MuonIsolationAnalyzer::MuonIsolationAnalyzer(const edm::ParameterSet& iConfig):
   vertexToken_(consumes<std::vector<reco::Vertex> >(iConfig.getUntrackedParameter<edm::InputTag>("vertexTag"))),
   genToken_(consumes<std::vector<reco::GenParticle> >(iConfig.getUntrackedParameter<edm::InputTag>("genTag"))),
   pfCandToken_(consumes<std::vector<reco::PFCandidate> >(iConfig.getUntrackedParameter<edm::InputTag>("pfCandTag"))),
+  genVertexToken_(consumes<vector<SimVertex> >(iConfig.getUntrackedParameter<edm::InputTag>("genVtxTag"))),
+  //genXYZToken_(consumes<genXYZ>(iConfig.getUntrackedParameter<edm::InputTag>("genXYZTag"))),    
+  genXYZToken_(consumes< ROOT::Math::PositionVector3D<ROOT::Math::Cartesian3D<float>,ROOT::Math::DefaultCoordinateSystemTag> >(iConfig.getUntrackedParameter<edm::InputTag>("genXYZTag"))),
+  genT0Token_(consumes<float>(iConfig.getUntrackedParameter<edm::InputTag>("genT0Tag"))),
   isZmumuSignal_(iConfig.getParameter<bool>("isZmumuSignal"))
 {
    //now do what ever initialization is needed
@@ -179,6 +194,63 @@ MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
    iEvent.getByToken(vertexToken_, vertexHandle_);
    auto vertices = *vertexHandle_.product();
 
+   iEvent.getByToken(genXYZToken_, genXYZHandle_);
+   iEvent.getByToken(genT0Token_, genT0Handle_);
+   iEvent.getByToken(genVertexToken_, genVertexHandle_);    
+
+   //---get truth PV
+   const SimVertex *genPV = NULL;// = SimVertex();
+   if(genVertexHandle_.isValid())
+     //genPV = genVertexHandle_.product()->at(0);
+     genPV = &(genVertexHandle_.product()->at(0));
+   else
+     {
+       //auto xyz = genXYZHandle_.product();
+       //auto t = *genT0Handle_.product();
+       //auto v = math::XYZVectorD(xyz->x(), xyz->y(), xyz->z());
+       std::cout << "oh actually sometimes we don't find a gen pv" << std::endl;
+       return;
+       //genPV = *(SimVertex(v, t));
+     }
+   
+   int vtx_index = -1;
+   
+   //---find the vertex this muon is best associated to..
+   double min_dz = std::numeric_limits<double>::max();
+   //double min_dzdt = std::numeric_limits<double>::max();
+   for( unsigned i = 0; i < vertexHandle_->size(); ++i ) {
+       const auto& vtx = (*vertexHandle_)[i];
+       const float dz = std::abs(vtx.z() - genPV->position().z());
+       if( dz < min_dz )
+	 {
+	   min_dz = dz;
+	   vtx_index = i;
+	 }
+       // if( dz < 0.1 )
+       // {
+       //     if(isTimingSample_)
+       //     {
+       //         const double dzdt = pow((vtx.z() - genPV->position().z())/vtx.zError(), 2) +
+       //             pow((vtx.t()-genPV->position().t())/vtx.tError(), 2);                            
+       //         if( dzdt < min_dzdt )
+       //         {
+       //             min_dzdt = dzdt;
+       //             vtx_index = i;
+       //         }
+       //     }
+       //     else if( dz < min_dz )
+       //     {
+       //             min_dz = dz;
+       //             vtx_index = i;
+       //     }
+       // }
+   }
+   if (vtx_index == -1) // no good PV found
+     return;
+   vertex = (*vertexHandle_)[vtx_index];
+   h_event_cutflow_->Fill("Good Vertex", 1);
+
+   /*
    int numpv=0; int iPV=0;
    bool firstGoodPV = false;
    reco::Vertex vertex;
@@ -207,7 +279,7 @@ MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
    if (firstGoodPV == false) // no good PV found
      return;
    h_event_cutflow_->Fill("Good Vertex", 1);
-
+   */
 
    // *** 2. Load tracks
    iEvent.getByToken(tracksToken_,tracksHandle_);
@@ -353,8 +425,7 @@ float MuonIsolationAnalyzer::getMuonPFCandIso(const reco::Muon& iMuon, edm::Hand
        result += pfCandidate.pt();
      }
    }
-   
-   std::cout << "Isolation = " << result << " with " << numberOfAssociatedPFCandidates << " associated to muon" << std::endl;
+   //std::cout << "Isolation = " << result << " with " << numberOfAssociatedPFCandidates << " associated to muon" << std::endl;
    
    return result;
 }
@@ -640,12 +711,12 @@ bool MuonIsolationAnalyzer::isGoodMuon(const reco::Muon& iMuon) const
   if ( fabs(iMuon.muonBestTrack()->dxy(vertex.position())) > 0.2 )
     return false;
   h_muon_cutflow_->Fill("d0 < 0.2 cm", 1);
-  /*
+  
   // *** 4. z0 cut
   if ( fabs(iMuon.muonBestTrack()->dz(vertex.position())) > 0.5 )
     return false;
   h_muon_cutflow_->Fill("z0 < 0.5 cm", 1);
-  */
+  
 
   bool recoMuonMatchedToPromptTruth = false;
   // *** 5A. accept only prompt muons if Z->mumu signal
