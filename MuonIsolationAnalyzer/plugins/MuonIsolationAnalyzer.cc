@@ -32,6 +32,7 @@
 #include "DataFormats/TrackReco/interface/Track.h"
 #include "DataFormats/TrackReco/interface/TrackFwd.h"
 
+#include "DataFormats/PatCandidates/interface/Muon.h"
 #include "DataFormats/MuonReco/interface/Muon.h"
 #include "DataFormats/MuonReco/interface/MuonFwd.h"
 #include "DataFormats/MuonReco/interface/MuonIsolation.h"
@@ -129,6 +130,8 @@ class MuonIsolationAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResour
       TH1* h_muon_cutflow_;    
       TH1* h_ttbarDecayMode_;    
       TH2* h_ttbarDecayMode_vs_nPromptMuons_;    
+      TH1* h_muon_pfCandpT;
+      TH1* h_muon_pT;
 
 };
 
@@ -310,6 +313,7 @@ MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
 
    for(unsigned iMuon = 0; iMuon < muons.size(); ++iMuon)   {
      auto muon = muons.at(iMuon);
+     //h_muon_pT->Fill(muon.pt());
      if ( !isGoodMuon( muon )) continue;
 
      // ** A. "Analysis-like" isolation borrowed from ttH
@@ -317,7 +321,8 @@ MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
      //std::cout << "Muon number " << iMuon << " has pT = " << muon.pt() << " and PFRelIso (R=0.3) = " << pfRelIso03 << std::endl;
      // ** B. "TDR-like" isolation using PFCandidates
      float pfCandIso03 = getMuonPFCandIso( muon, pfCandHandle_ );
-     
+
+     h_muon_pT->Fill(muon.pt());     
 
      // Fill information about muon PF relIso (R=0.3)
      if ( fabs(muon.eta()) < 1.5){
@@ -374,7 +379,8 @@ MuonIsolationAnalyzer::beginJob()
   h_muon_pfRelIso03_ETL_ = fileService->make<TH1F>("h_muon_pfRelIso03_ETL", "h_muon_pfRelIso03_ETL", 250, 0, 5.0);
   h_muon_pfCandIso03_BTL_ = fileService->make<TH1F>("h_muon_pfCandIso03_BTL", "h_muon_pfCandIso03_BTL", 250, 0, 5.0);
   h_muon_pfCandIso03_ETL_ = fileService->make<TH1F>("h_muon_pfCandIso03_ETL", "h_muon_pfCandIso03_ETL", 250, 0, 5.0);
-
+  h_muon_pfCandpT = fileService->make<TH1F>("h_muon_pfCandpT", "h_muon_pfCandpT", 500, 0, 100.0);
+  h_muon_pT = fileService->make<TH1F>("h_muon_pT", "h_muon_pT", 500, 0, 100.0);
 
 }
 
@@ -395,7 +401,7 @@ float MuonIsolationAnalyzer::getMuonPFCandIso(const reco::Muon& iMuon, edm::Hand
 
    for(unsigned iPFCand = 0; iPFCand < pfCandidates.size(); ++iPFCand)   {
      auto pfCandidate = pfCandidates.at(iPFCand);
-     
+     h_muon_pfCandpT->Fill(pfCandidate.pt());
      // skip neutrals
      if (pfCandidate.charge()==0) 
        continue;
@@ -405,12 +411,18 @@ float MuonIsolationAnalyzer::getMuonPFCandIso(const reco::Muon& iMuon, edm::Hand
 
      // kinematic cuts on PF candidate
      if ( fabs(track->eta())<1.5){ // BTL acceptance
+       //std::cout << "BTL  " << fabs(track->dz(vertex.position())) << std::endl;
        if (track->pt() < 0.7)
 	 continue;
-     }
+       if ( fabs(track->dz(vertex.position())) > 0.1 )
+	 continue;
+    }
      else if ( fabs(track->eta())>1.5 && fabs(track->eta())<2.8) { // ETL acceptance
+       //std::cout << "ETL  " << fabs(track->dz(vertex.position())) << std::endl;
        if (track->pt() < 0.4)
 	 continue;
+       if ( fabs(track->dz(vertex.position())) > 0.2 )
+         continue;
      }
      else
        continue;
@@ -699,7 +711,8 @@ bool MuonIsolationAnalyzer::isGoodMuon(const reco::Muon& iMuon) const
   h_muon_cutflow_->Fill("|eta| < 2.4", 1);
   
   // *** 2. Loose ID
-  if ( iMuon.passed('CutBasedIdLoose'))//userFloat("CutBasedIdLoose") ) // CutBasedIdLoose, MvaLoose, others?
+  //if ( iMuon.passed('CutBasedIdLoose'))//userFloat("CutBasedIdLoose") ) // CutBasedIdLoose, MvaLoose, others?
+  if ( !(muon::isLooseMuon(iMuon)) )
     return false;
   h_muon_cutflow_->Fill("Loose ID", 1);
 
