@@ -6,8 +6,8 @@ void drawROC()
     TFile *f_sig = new TFile(s_sig); 
     TFile *f_bkg = new TFile(s_bkg);
 
-    TH1F *h_sig = (TH1F*)f_sig->Get("MuonIsolationAnalyzer/h_muon_pfRelIso03_BTL");
-    TH1F *h_bkg = (TH1F*)f_bkg->Get("MuonIsolationAnalyzer/h_muon_pfRelIso03_BTL");
+    TH1F *h_sig = (TH1F*)f_sig->Get("MuonIsolationAnalyzer/h_muon_pfCandIso03_BTL");
+    TH1F *h_bkg = (TH1F*)f_bkg->Get("MuonIsolationAnalyzer/h_muon_pfCandIso03_BTL");
     TH1F *h_ttbar_ptCand = (TH1F*)f_bkg->Get("MuonIsolationAnalyzer/h_muon_pT");
 
     int nbins = h_sig->GetNbinsX();

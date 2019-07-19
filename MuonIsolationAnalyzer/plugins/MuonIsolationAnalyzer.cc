@@ -439,7 +439,7 @@ float MuonIsolationAnalyzer::getMuonPFCandIso(const reco::Muon& iMuon, edm::Hand
    }
    //std::cout << "Isolation = " << result << " with " << numberOfAssociatedPFCandidates << " associated to muon" << std::endl;
    
-   return result;
+   return result/(iMuon.pt());
 }
 
 
