@@ -120,6 +120,7 @@ class MuonIsolationAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResour
       reco::Vertex vertex;
       bool isZmumuSignal_;
       vector<const reco::Candidate*> promptMuonTruthCandidates_;
+      float IdentityCut;
 
       //---outputs
       TH1* h_event_cutflow_;    
@@ -132,6 +133,7 @@ class MuonIsolationAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResour
       TH2* h_ttbarDecayMode_vs_nPromptMuons_;    
       TH1* h_muon_pfCandpT;
       TH1* h_muon_pT;
+      TH1* h_muon_numCand;
 
 };
 
@@ -186,6 +188,7 @@ void
 MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
 {
    using namespace edm;
+   IdentityCut = 0.01;
 
    //Handle<TrackCollection> tracks;
    //iEvent.getByToken(tracksToken_, tracks);
@@ -285,12 +288,15 @@ MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
    */
 
    // *** 2. Load tracks
+   /*
    iEvent.getByToken(tracksToken_,tracksHandle_);
    auto tracks = *tracksHandle_.product();
 
    for(unsigned iTrack = 0; iTrack < tracks.size(); ++iTrack)   {
      auto track = tracks.at(iTrack);
    }
+
+   */
 
 
    // *** 3. Load generator MC particles
@@ -327,10 +333,12 @@ MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
      // Fill information about muon PF relIso (R=0.3)
      if ( fabs(muon.eta()) < 1.5){
        h_muon_pfRelIso03_BTL_->Fill( pfRelIso03 );
+       //if ( pfCandIso03>=0 )
        h_muon_pfCandIso03_BTL_->Fill( pfCandIso03 );
      }
      else if ( fabs(muon.eta()) > 1.5 && fabs(muon.eta()) < 2.8){
        h_muon_pfRelIso03_ETL_->Fill( pfRelIso03 );
+       //if ( pfCandIso03>=0 )
        h_muon_pfCandIso03_ETL_->Fill( pfCandIso03 );
      }
      if (hasGoodMuon == false)
@@ -377,10 +385,11 @@ MuonIsolationAnalyzer::beginJob()
   h_muon_cutflow_ = fileService->make<TH1D>("h_muon_cutflow", "h_muon_cutflow", 7, 0, 7);
   h_muon_pfRelIso03_BTL_ = fileService->make<TH1F>("h_muon_pfRelIso03_BTL", "h_muon_pfRelIso03_BTL", 250, 0, 5.0);
   h_muon_pfRelIso03_ETL_ = fileService->make<TH1F>("h_muon_pfRelIso03_ETL", "h_muon_pfRelIso03_ETL", 250, 0, 5.0);
-  h_muon_pfCandIso03_BTL_ = fileService->make<TH1F>("h_muon_pfCandIso03_BTL", "h_muon_pfCandIso03_BTL", 250, 0, 5.0);
-  h_muon_pfCandIso03_ETL_ = fileService->make<TH1F>("h_muon_pfCandIso03_ETL", "h_muon_pfCandIso03_ETL", 250, 0, 5.0);
+  h_muon_pfCandIso03_BTL_ = fileService->make<TH1F>("h_muon_pfCandIso03_BTL", "h_muon_pfCandIso03_BTL", 5000, 0, 5.0);
+  h_muon_pfCandIso03_ETL_ = fileService->make<TH1F>("h_muon_pfCandIso03_ETL", "h_muon_pfCandIso03_ETL", 5000, 0, 5.0);
   h_muon_pfCandpT = fileService->make<TH1F>("h_muon_pfCandpT", "h_muon_pfCandpT", 500, 0, 100.0);
   h_muon_pT = fileService->make<TH1F>("h_muon_pT", "h_muon_pT", 500, 0, 100.0);
+  h_muon_numCand = fileService->make<TH1F>("h_muon_numCand", "h_muon_numCand", 50, 0, 50.0);
 
 }
 
@@ -394,7 +403,7 @@ float MuonIsolationAnalyzer::getMuonPFCandIso(const reco::Muon& iMuon, edm::Hand
 {
   float result = 0; 
   float isoCone = 0.3;
-  float identityCone = 0.05;
+  float identityCone = IdentityCut;
   int numberOfAssociatedPFCandidates = 0;
 
    auto pfCandidates = *pfCandHandle.product();
@@ -433,12 +442,15 @@ float MuonIsolationAnalyzer::getMuonPFCandIso(const reco::Muon& iMuon, edm::Hand
      float DR = sqrt(Deta*Deta+Dphi*Dphi);
      
      if (DR < isoCone && DR > identityCone){
+       //if( result<0 )
+	 //result = 0;
+     //if (DR < isoCone) {
        numberOfAssociatedPFCandidates++;
        result += pfCandidate.pt();
      }
    }
    //std::cout << "Isolation = " << result << " with " << numberOfAssociatedPFCandidates << " associated to muon" << std::endl;
-   
+   h_muon_numCand->Fill(numberOfAssociatedPFCandidates);
    return result/(iMuon.pt());
 }
 
@@ -602,7 +614,7 @@ void MuonIsolationAnalyzer::getPromptMuons(edm::Handle<std::vector<reco::GenPart
       promptMuonTruthCandidates_.push_back( promptMuon );
     }
   }
-  if (numberOfPromptMuons > 2)
+  if ( (numberOfPromptMuons > 2) && (isZmumuSignal_) )
     std::cout << "!!!!!!!!!!!!!!!! PANIC !!!!!! in z->mumu event, # of prompt final state muons = " << numberOfPromptMuons << std::endl;
   
   return;
@@ -740,7 +752,7 @@ bool MuonIsolationAnalyzer::isGoodMuon(const reco::Muon& iMuon) const
       float Dphi = deltaPhi( iMuon.phi(), promptTruthMuon->phi());
       float DR = sqrt(Deta*Deta+Dphi*Dphi);
       
-      if (DR < 0.05)
+      if (DR < IdentityCut)
 	recoMuonMatchedToPromptTruth = true;
     }
     if (!recoMuonMatchedToPromptTruth)
@@ -755,13 +767,13 @@ bool MuonIsolationAnalyzer::isGoodMuon(const reco::Muon& iMuon) const
       float Dphi = deltaPhi( iMuon.phi(), promptTruthMuon->phi());
       float DR = sqrt(Deta*Deta+Dphi*Dphi);
       
-      if (DR < 0.05)
+      if (DR < IdentityCut)
 	recoMuonMatchedToPromptTruth = true;
     }
     if (recoMuonMatchedToPromptTruth)
       return false;
     h_muon_cutflow_->Fill("Non-prompt Bkg Muon", 1);
-    
+
   }
 
   return true;

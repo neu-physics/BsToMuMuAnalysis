@@ -1,5 +1,7 @@
 void drawROC()
 {
+    gStyle->SetOptStat(0);
+    gStyle->SetLegendBorderSize(0);
     TString s_sig = "muonIsolation_output_zmumu.root";
     TString s_bkg = "muonIsolation_output_ttbar.root";
 
@@ -9,6 +11,8 @@ void drawROC()
     TH1F *h_sig = (TH1F*)f_sig->Get("MuonIsolationAnalyzer/h_muon_pfCandIso03_BTL");
     TH1F *h_bkg = (TH1F*)f_bkg->Get("MuonIsolationAnalyzer/h_muon_pfCandIso03_BTL");
     TH1F *h_ttbar_ptCand = (TH1F*)f_bkg->Get("MuonIsolationAnalyzer/h_muon_pT");
+    TH1F *h_z_numCand = (TH1F*)f_sig->Get("MuonIsolationAnalyzer/h_muon_cutflow");
+    TH1F *h_t_numCand = (TH1F*)f_bkg->Get("MuonIsolationAnalyzer/h_muon_cutflow");
 
     int nbins = h_sig->GetNbinsX();
     float sig_integral = h_sig->Integral(1,nbins);
@@ -29,18 +33,30 @@ void drawROC()
     c1->cd();
     c1->SetGrid();
     g->SetTitle("prompt muon ROC curve(BTL);prompt eff;non-prompt eff");
-    g->GetXaxis()->SetRangeUser(0.8,1);
-    g->GetYaxis()->SetRangeUser(0,0.35);
-    g->Draw();
+    //g->GetXaxis()->SetRangeUser(0.8,1);
+    //g->GetYaxis()->SetRangeUser(0,0.35);
+    g->Draw("AP*");
     /*h_sig->SetLineColor(kRed);
     h_bkg->SetLineColor(kBlack);
     h_sig->GetYaxis()->SetRangeUser(0.1,1000);
     h_sig->Draw();
     h_bkg->Draw("same");
     c1->SetLogy();*/
-    TCanvas *c2 = new TCanvas("c2","c2",600,800);
+    TCanvas *c2 = new TCanvas("c2","c2",600,600);
     c2->cd();
     h_ttbar_ptCand->GetXaxis()->SetRangeUser(0,100);
     h_ttbar_ptCand->SetTitle("muon_pT;pT;#events");
-    h_ttbar_ptCand->Draw();
+    //h_ttbar_ptCand->Draw();
+    h_z_numCand->SetTitle("muon cut flow;;# muons");
+    h_z_numCand->SetLineColor(kBlue);
+    h_t_numCand->SetLineColor(kRed);
+    //h_z_numCand->GetXaxis()->SetRangeUser(0,20);
+    h_t_numCand->Draw();
+    h_z_numCand->Draw("same");
+    
+    TLegend* leg = new TLegend(0.75,0.75,0.9,0.9);
+    //gStyle->SetLegendBorderSize(0);
+    leg->AddEntry(h_z_numCand,"z->mumu");
+    leg->AddEntry(h_t_numCand,"ttbar");
+    leg->Draw();
 }

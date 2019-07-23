@@ -4,7 +4,8 @@ process = cms.Process("MuonIsolationAnalyzer")
 
 process.load("FWCore.MessageService.MessageLogger_cfi")
 
-isZmumu = False # boolean for signal/background
+#isZmumu = True   # boolean for signal/background
+isZmumu = False  # boolean for signal/background
 
 process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(-1) )
 #process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(15) )
