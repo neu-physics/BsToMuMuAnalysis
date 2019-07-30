@@ -2,6 +2,7 @@ import FWCore.ParameterSet.Config as cms
 
 MuonIsolationAnalyzer = cms.EDAnalyzer('MuonIsolationAnalyzer',
                                        genTag = cms.untracked.InputTag("genParticles"),
+				       genJetTag = cms.untracked.InputTag("ak4GenJets"),
                                        #simHitsBTLTag = cms.untracked.InputTag("g4SimHits:FastTimerHitsBarrel"),
                                        #recHitsBTLTag = cms.untracked.InputTag("mtdRecHits:FTLBarrel"),
                                        #uncal_recHitsBTLTag = cms.untracked.InputTag("mtdUncalibratedRecHits:FTLBarrel"),

@@ -47,6 +47,8 @@
 
 #include "DataFormats/HepMCCandidate/interface/GenParticle.h"
 #include "DataFormats/HepMCCandidate/interface/GenParticleFwd.h"
+#include "DataFormats/JetReco/interface/GenJet.h"
+
 #include "DataFormats/Candidate/interface/Candidate.h"
 #include "DataFormats/Math/interface/deltaPhi.h"
 
@@ -81,7 +83,7 @@ class MuonIsolationAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResour
       static void fillDescriptions(edm::ConfigurationDescriptions& descriptions);
       float getMuonPFRelIso(const reco::Muon&) const;
       float getMuonPFCandIso(const reco::Muon&, edm::Handle<std::vector<reco::PFCandidate> >& pfCandHandle) const;
-      bool  isGoodMuon(const reco::Muon&) const;
+      bool  isGoodMuon(const reco::Muon&, edm::Handle<std::vector<reco::GenJet> >& genJetHandle) const;
       int   ttbarDecayMode(edm::Handle<std::vector<reco::GenParticle> >& genHandle);
       void  getPromptMuons(edm::Handle<std::vector<reco::GenParticle> >& genHandle);
       const reco::Candidate * GetObjectJustBeforeDecay( const reco::Candidate * particle );
@@ -107,6 +109,8 @@ class MuonIsolationAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResour
       edm::Handle< std::vector<reco::Vertex> > vertexHandle_;
       edm::EDGetTokenT< std::vector<reco::GenParticle> > genToken_;
       edm::Handle< std::vector<reco::GenParticle> > genHandle_;
+      edm::EDGetTokenT< std::vector<reco::GenJet> > genJetToken_;
+      edm::Handle< std::vector<reco::GenJet> > genJetHandle_;
       edm::EDGetTokenT< std::vector<reco::PFCandidate> > pfCandToken_;
       edm::Handle< std::vector<reco::PFCandidate> > pfCandHandle_;
       edm::EDGetTokenT<vector<SimVertex> >                 genVertexToken_;
@@ -119,8 +123,7 @@ class MuonIsolationAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResour
 
       reco::Vertex vertex;
       bool isZmumuSignal_;
-      vector<const reco::Candidate*> promptMuonTruthCandidates_;
-      float IdentityCut;
+      vector<const reco::Candidate*> promptMuonTruthCandidates_; float IdentityCut;
 
       //---outputs
       TH1* h_event_cutflow_;    
@@ -155,6 +158,7 @@ MuonIsolationAnalyzer::MuonIsolationAnalyzer(const edm::ParameterSet& iConfig):
   muonsToken_(consumes<std::vector<reco::Muon> >(iConfig.getUntrackedParameter<edm::InputTag>("muonsTag"))),
   vertexToken_(consumes<std::vector<reco::Vertex> >(iConfig.getUntrackedParameter<edm::InputTag>("vertexTag"))),
   genToken_(consumes<std::vector<reco::GenParticle> >(iConfig.getUntrackedParameter<edm::InputTag>("genTag"))),
+  genJetToken_(consumes<std::vector<reco::GenJet> >(iConfig.getUntrackedParameter<edm::InputTag>("genJetTag"))),
   pfCandToken_(consumes<std::vector<reco::PFCandidate> >(iConfig.getUntrackedParameter<edm::InputTag>("pfCandTag"))),
   genVertexToken_(consumes<vector<SimVertex> >(iConfig.getUntrackedParameter<edm::InputTag>("genVtxTag"))),
   //genXYZToken_(consumes<genXYZ>(iConfig.getUntrackedParameter<edm::InputTag>("genXYZTag"))),    
@@ -188,7 +192,7 @@ void
 MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
 {
    using namespace edm;
-   IdentityCut = 0.01;
+   IdentityCut = 0.05;
 
    //Handle<TrackCollection> tracks;
    //iEvent.getByToken(tracksToken_, tracks);
@@ -199,6 +203,8 @@ MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
    // *** 1. Load vertices
    iEvent.getByToken(vertexToken_, vertexHandle_);
    auto vertices = *vertexHandle_.product();
+
+   iEvent.getByToken(genJetToken_, genJetHandle_);
 
    iEvent.getByToken(genXYZToken_, genXYZHandle_);
    iEvent.getByToken(genT0Token_, genT0Handle_);
@@ -320,7 +326,7 @@ MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
    for(unsigned iMuon = 0; iMuon < muons.size(); ++iMuon)   {
      auto muon = muons.at(iMuon);
      //h_muon_pT->Fill(muon.pt());
-     if ( !isGoodMuon( muon )) continue;
+     if ( !isGoodMuon( muon, genJetHandle_ )) continue;
 
      // ** A. "Analysis-like" isolation borrowed from ttH
      float pfRelIso03 = getMuonPFRelIso( muon );
@@ -424,6 +430,8 @@ float MuonIsolationAnalyzer::getMuonPFCandIso(const reco::Muon& iMuon, edm::Hand
        if (track->pt() < 0.7)
 	 continue;
        if ( fabs(track->dz(vertex.position())) > 0.1 )
+	 continue;
+       if ( fabs(track->dxy(vertex.position()))>0.02 )
 	 continue;
     }
      else if ( fabs(track->eta())>1.5 && fabs(track->eta())<2.8) { // ETL acceptance
@@ -708,12 +716,13 @@ int MuonIsolationAnalyzer::ttbarDecayMode(edm::Handle<std::vector<reco::GenParti
   return decayMode;
 }
 
-bool MuonIsolationAnalyzer::isGoodMuon(const reco::Muon& iMuon) const
+bool MuonIsolationAnalyzer::isGoodMuon(const reco::Muon& iMuon, edm::Handle<std::vector<reco::GenJet> >& genJetHandle) const
 {
   
   h_muon_cutflow_->Fill("All Muons", 1);
   // *** 0. pT > 20 GeV ---> may need to change this for Bs->mumu studies, but keep for now to reproduce TDR results
   if (iMuon.pt() < 20.)
+  //if (iMuon.pt() < 0.5 )
     return false;
   h_muon_cutflow_->Fill("pT > 20", 1);
 
@@ -761,6 +770,9 @@ bool MuonIsolationAnalyzer::isGoodMuon(const reco::Muon& iMuon) const
   }
   // *** 5B. reject prompt muons if ttbar background
   else if (!isZmumuSignal_) {
+    bool recoMuonMatchedToGenJet = false;
+    //iEvent.getByToken(genJetToken_, genJetHandle_);
+    auto jets = *genJetHandle_.product();
     for( unsigned int iTruthMuon = 0; iTruthMuon < promptMuonTruthCandidates_.size(); iTruthMuon++){
       const reco::Candidate * promptTruthMuon = ( promptMuonTruthCandidates_[iTruthMuon]);
       float Deta = iMuon.eta() - promptTruthMuon->eta();
@@ -770,7 +782,17 @@ bool MuonIsolationAnalyzer::isGoodMuon(const reco::Muon& iMuon) const
       if (DR < IdentityCut)
 	recoMuonMatchedToPromptTruth = true;
     }
-    if (recoMuonMatchedToPromptTruth)
+    for( unsigned int iJet = 0; iJet < genJetHandle_->size(); ++iJet ) {
+      //iEvent.getByToken(genJetToken_, genJetHandle_);
+      auto jet = jets.at(iJet);
+      if (jet.pt()<15) continue;
+      float Deta_jet = iMuon.eta() - jet.eta();
+      float Dphi_jet = deltaPhi( iMuon.phi(), jet.phi()); 
+      float DR_jet = sqrt(Deta_jet*Deta_jet+Dphi_jet*Dphi_jet);            
+      if (DR_jet < 0.3)
+	recoMuonMatchedToGenJet = true;
+    }
+    if ((recoMuonMatchedToPromptTruth) || (! recoMuonMatchedToGenJet))
       return false;
     h_muon_cutflow_->Fill("Non-prompt Bkg Muon", 1);
 
