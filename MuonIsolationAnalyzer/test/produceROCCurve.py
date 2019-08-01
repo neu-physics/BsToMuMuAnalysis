@@ -7,16 +7,25 @@ process.load("FWCore.MessageService.MessageLogger_cfi")
 #isZmumu = True   # boolean for signal/background
 isZmumu = False  # boolean for signal/background
 
+is200PU = True
+
 process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(-1) )
 #process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(15) )
 
 
 import FWCore.Utilities.FileUtils as FileUtils
+sample = ''
+nPU = ''
 if isZmumu:
-    inputDatafileList = FileUtils.loadListFromFile ('MuonIsolationAnalyzer/data/filelists/zmumu_files_xrd.txt') 
+    sample = 'zmumu'
+    nPU = '_PU' if is200PU else ''
 else:
-    inputDatafileList = FileUtils.loadListFromFile ('MuonIsolationAnalyzer/data/filelists/ttbar_files_xrd.txt') 
+    sample = 'ttbar'
+    nPU = '_PU' if is200PU else ''
 
+
+inputDatafileList = FileUtils.loadListFromFile ('MuonIsolationAnalyzer/data/filelists/{0}_files_xrd{1}.txt'.format(sample, nPU) ) 
+    
 process.source = cms.Source("PoolSource",
                             # replace 'myfile.root' with the source file you want to use
                             fileNames = cms.untracked.vstring(
@@ -31,10 +40,7 @@ process.load('BsToMuMuAnalysis.MuonIsolationAnalyzer.MuonIsolationAnalyzer_cfi')
 muonIsoAnalyzer = process.MuonIsolationAnalyzer
 muonIsoAnalyzer.isZmumuSignal = isZmumu
 
-if isZmumu:
-    process.TFileService = cms.Service("TFileService", fileName = cms.string("muonIsolation_output_zmumu.root") )
-else:
-    process.TFileService = cms.Service("TFileService", fileName = cms.string("muonIsolation_output_ttbar.root") )
+process.TFileService = cms.Service("TFileService", fileName = cms.string("muonIsolation_output_{0}{1}.root".format(sample, nPU)) )
 
 process.runseq = cms.Sequence()
 process.runseq += muonIsoAnalyzer
