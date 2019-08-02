@@ -2,11 +2,14 @@ void drawROC()
 {
     gStyle->SetOptStat(0);
     gStyle->SetLegendBorderSize(0);
-    TString s_sig = "muonIsolation_output_zmumu.root";
-    TString s_bkg = "muonIsolation_output_ttbar.root";
+    TString s_sig = "01-08-19_0PU/muonIsolation_output_zmumu.root";
+    TString s_bkg = "01-08-19_0PU/muonIsolation_output_ttbar.root";
 
     TFile *f_sig = new TFile(s_sig); 
     TFile *f_bkg = new TFile(s_bkg);
+
+    //std::cout << "signal has " << f_sig->IsOpen() << " entries" << std::endl;
+    //std::cout << "background has " << f_bkg->IsOpen() << " entries" << std::endl;
 
     TH1F *h_sig = (TH1F*)f_sig->Get("MuonIsolationAnalyzer/h_muon_pfCandIso03_BTL");
     TH1F *h_bkg = (TH1F*)f_bkg->Get("MuonIsolationAnalyzer/h_muon_pfCandIso03_BTL");
@@ -36,13 +39,19 @@ void drawROC()
     //g->GetXaxis()->SetRangeUser(0.8,1);
     //g->GetYaxis()->SetRangeUser(0,0.35);
     g->Draw("AP*");
+    g->GetXaxis()->SetRangeUser(.8, 1);
+    g->GetYaxis()->SetRangeUser(0, .6);
+
+    c1->Print("muonIsolationROC.png");
+
     /*h_sig->SetLineColor(kRed);
     h_bkg->SetLineColor(kBlack);
     h_sig->GetYaxis()->SetRangeUser(0.1,1000);
     h_sig->Draw();
     h_bkg->Draw("same");
     c1->SetLogy();*/
-    TCanvas *c2 = new TCanvas("c2","c2",600,600);
+
+    /*TCanvas *c2 = new TCanvas("c2","c2",600,600);
     c2->cd();
     h_ttbar_ptCand->GetXaxis()->SetRangeUser(0,100);
     h_ttbar_ptCand->SetTitle("muon_pT;pT;#events");
@@ -59,4 +68,5 @@ void drawROC()
     leg->AddEntry(h_z_numCand,"z->mumu");
     leg->AddEntry(h_t_numCand,"ttbar");
     leg->Draw();
+    */
 }
