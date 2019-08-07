@@ -56,9 +56,14 @@ else:
 print "##########     Tarring workdir     ##########"
 tarball_name = "{0}.tar.gz".format(args.outputDir)
 #os.system("tar -cvzf {0} ./ --exclude 'plots*' --exclude '.git' --exclude 'test*' --exclude 'submitOneFile_' --exclude '*.tar.gz' --exclude 'ttbar*' --exclude '*-18' --exclude '*2018' --exclude 'MET*' --exclude 'single*' --exclude 'pass*' --exclude 'quick*' --exclude 'oldFilelists' --exclude 'jetHT*'".format(tarball_name))
-os.system("tar -cvzf {0} ./ --exclude '.git' --exclude 'test*' --exclude 'submitOneFile_' --exclude '*.tar.gz' --exclude '*-19_*' --exclude '*2019' --exclude 'pass*'".format(tarball_name))
+#os.system('cd /uscms_data/d2/benjtann/MTD_DPG; ls')
+#os.system('ls')
+#exit()
+os.system("cd /uscms_data/d2/benjtann/MTD_DPG; tar -cvzf {0} CMSSW_10_4_0_mtd5 --exclude '.git' --exclude 'test*' --exclude 'submitOneFile_' --exclude '*.tar.gz' --exclude '*-19_*' --exclude '*2019' --exclude 'pass*' --exclude '.SCRAM*' --exclude 'tmp' --exclude 'lib' --exclude 'config' --exclude 'external'; cd -; cp /uscms_data/d2/benjtann/MTD_DPG/{0} .".format(tarball_name))
 if ( not os.path.exists("/eos/uscms/store/user/benjtann/{0}/".format(args.outputDir)) ):
     os.system("mkdir /eos/uscms/store/user/benjtann/{0}/".format(args.outputDir))
+#os.system('cd -')
+#os.system('cp ../../../{0} .'.format(tarball_name) )
 os.system("xrdcp {0} root://cmseos.fnal.gov//store/user/benjtann/{1}/".format(tarball_name, args.outputDir))
 #os.system("xrdcp {0} root://cmseos.fnal.gov//store/user/benjtann/{0}/{1}".format(tarball_name, args.outputDir))
 #os.system("rm {0}".format(tarball_name))

@@ -1,13 +1,16 @@
+#!/bin/tcsh
+
 echo "Starting job on " `date` #Date/time of start of job
 echo "Running on: `uname -a`" #Condor job is running on this node
 echo "System software: `cat /etc/redhat-release`" #Operating System on that node
 source /cvmfs/cms.cern.ch/cmsset_default.csh  ## if a bash script, use .sh instead of .csh
 
-xrdcp -s root://cmseos.fnal.gov//store/user/benjtann/condor_tarballs/$4 .
+xrdcp -s root://cmseos.fnal.gov//store/user/benjtann/$5/$4 .
 tar -xf $4
 rm $4
 
-setenv SCRAM_ARCH slc7_amd64_gcc700
+#setenv SCRAM_ARCH slc7_amd64_gcc700
+setenv SCRAM_ARCH slc6_amd64_gcc700
 cd CMSSW_10_4_0_mtd5/src/
 scramv1 b ProjectRename
 eval `scramv1 runtime -csh` # cmsenv is an alias not on the workers
