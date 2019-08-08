@@ -7,9 +7,11 @@ process = cms.Process("MuonIsolationAnalyzer")
 process.load("FWCore.MessageService.MessageLogger_cfi")
 
 # opt 1: isZmumu, opt2: isPU, opt3: input file
-if len(sys.argv) != 4:
+#if len(sys.argv) != 4 or len(sys.argv) != 5:
+if len(sys.argv) != 5:
     print('INPUTS INCORRECT. RECIEVED {0} . EXITING\n'.format( sys.argv ) )
-    exit()
+    print( len (sys.argv))
+    sys.exit()
 
 # boolean for signal/background
 isZmumu = True if sys.argv[1] == 'isZmumu' else False  

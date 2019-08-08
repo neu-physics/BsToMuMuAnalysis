@@ -59,7 +59,7 @@ tarball_name = "{0}.tar.gz".format(args.outputDir)
 #os.system('cd /uscms_data/d2/benjtann/MTD_DPG; ls')
 #os.system('ls')
 #exit()
-os.system("cd /uscms_data/d2/benjtann/MTD_DPG; tar -cvzf {0} CMSSW_10_4_0_mtd5 --exclude '.git' --exclude 'test*' --exclude 'submitOneFile_' --exclude '*.tar.gz' --exclude '*-19_*' --exclude '*2019' --exclude 'pass*' --exclude '.SCRAM*' --exclude 'tmp' --exclude 'lib' --exclude 'config' --exclude 'external'; cd -; cp /uscms_data/d2/benjtann/MTD_DPG/{0} .".format(tarball_name))
+os.system("cd /uscms_data/d2/benjtann/MTD_DPG/CMSSW_10_4_0_mtd5/src/; tar -cvzf {0} BsToMuMuAnalysis --exclude '.git' --exclude 'test_*' --exclude 'submitOneFile_' --exclude '*.tar.gz' --exclude '*-19_*' --exclude '*2019' --exclude 'pass*' --exclude '.SCRAM*' --exclude 'tmp' --exclude 'lib' --exclude 'config' --exclude 'external'; cd -; mv /uscms_data/d2/benjtann/MTD_DPG/CMSSW_10_4_0_mtd5/src/{0} .".format(tarball_name))
 if ( not os.path.exists("/eos/uscms/store/user/benjtann/{0}/".format(args.outputDir)) ):
     os.system("mkdir /eos/uscms/store/user/benjtann/{0}/".format(args.outputDir))
 #os.system('cd -')
