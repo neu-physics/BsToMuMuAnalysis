@@ -123,6 +123,7 @@ class MuonIsolationAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResour
 
       reco::Vertex vertex;
       bool isZmumuSignal_;
+      //string lastFourFileID_;
       vector<const reco::Candidate*> promptMuonTruthCandidates_; float IdentityCut;
 
       //---outputs
@@ -165,6 +166,7 @@ MuonIsolationAnalyzer::MuonIsolationAnalyzer(const edm::ParameterSet& iConfig):
   genXYZToken_(consumes< ROOT::Math::PositionVector3D<ROOT::Math::Cartesian3D<float>,ROOT::Math::DefaultCoordinateSystemTag> >(iConfig.getUntrackedParameter<edm::InputTag>("genXYZTag"))),
   genT0Token_(consumes<float>(iConfig.getUntrackedParameter<edm::InputTag>("genT0Tag"))),
   isZmumuSignal_(iConfig.getParameter<bool>("isZmumuSignal"))
+  //lastFourFileID_(iConfig.getParameter<string>("lastFourFileID"))
 {
    //now do what ever initialization is needed
 

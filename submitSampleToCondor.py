@@ -55,18 +55,11 @@ else:
 # *** 1. Create .tar of directory and store in personal EOS
 print "##########     Tarring workdir     ##########"
 tarball_name = "{0}.tar.gz".format(args.outputDir)
-#os.system("tar -cvzf {0} ./ --exclude 'plots*' --exclude '.git' --exclude 'test*' --exclude 'submitOneFile_' --exclude '*.tar.gz' --exclude 'ttbar*' --exclude '*-18' --exclude '*2018' --exclude 'MET*' --exclude 'single*' --exclude 'pass*' --exclude 'quick*' --exclude 'oldFilelists' --exclude 'jetHT*'".format(tarball_name))
-#os.system('cd /uscms_data/d2/benjtann/MTD_DPG; ls')
-#os.system('ls')
-#exit()
-os.system("cd /uscms_data/d2/benjtann/MTD_DPG/CMSSW_10_4_0_mtd5/src/; tar -cvzf {0} BsToMuMuAnalysis --exclude '.git' --exclude 'test_*' --exclude 'submitOneFile_' --exclude '*.tar.gz' --exclude '*-19_*' --exclude '*2019' --exclude 'pass*' --exclude '.SCRAM*' --exclude 'tmp' --exclude 'lib' --exclude 'config' --exclude 'external'; cd -; mv /uscms_data/d2/benjtann/MTD_DPG/CMSSW_10_4_0_mtd5/src/{0} .".format(tarball_name))
+os.system("cd /uscms_data/d2/benjtann/MTD_DPG/CMSSW_10_4_0_mtd5/src/; tar -cvzf {0} BsToMuMuAnalysis --exclude '.git' --exclude 'test_*' --exclude 'submitOneFile_' --exclude '*.tar.gz' --exclude '*-19_*' --exclude '*2019' --exclude 'pass*' --exclude '.SCRAM*' --exclude 'tmp' --exclude 'lib' --exclude 'config' --exclude 'external'; cd /uscms_data/d2/benjtann/MTD_DPG/CMSSW_10_4_0_mtd5/src/BsToMuMuAnalysis ; mv /uscms_data/d2/benjtann/MTD_DPG/CMSSW_10_4_0_mtd5/src/{0} .".format(tarball_name))
 if ( not os.path.exists("/eos/uscms/store/user/benjtann/{0}/".format(args.outputDir)) ):
     os.system("mkdir /eos/uscms/store/user/benjtann/{0}/".format(args.outputDir))
-#os.system('cd -')
-#os.system('cp ../../../{0} .'.format(tarball_name) )
+
 os.system("xrdcp {0} root://cmseos.fnal.gov//store/user/benjtann/{1}/".format(tarball_name, args.outputDir))
-#os.system("xrdcp {0} root://cmseos.fnal.gov//store/user/benjtann/{0}/{1}".format(tarball_name, args.outputDir))
-#os.system("rm {0}".format(tarball_name))
 
 # *** 2. Create temporary .pdl file for condor submission
 print "\n##########     Submitting Condor jobs     ##########\n"
@@ -91,15 +84,11 @@ for line in txtfile:
     os.system("echo Error = {0}/condor_err/outfile_{1}.err >> {2}".format(args.outputDir, lastFourFileID, jdl_filename))
     os.system("echo Log = {0}/condor_logs/outfile_{1}.log >> {2}".format(args.outputDir, lastFourFileID, jdl_filename))
     os.system("echo x509userproxy = ${{X509_USER_PROXY}} >> {0}".format(jdl_filename))
-    #os.system("echo Arguments = {0} {1} {2} {3} >> {4}".format(args.outputDir, isZmumu, infile, tarball_name, jdl_filename))
     os.system("echo Arguments = {0} {1} {2} {3} {4} >> {5}".format(isZmumu, is200PU, infile, tarball_name, args.outputDir, jdl_filename))
-    os.system("echo Queue 1 >> {0}".format(jdl_filename))   
-
-    
+    os.system("echo Queue 1 >> {0}".format(jdl_filename))       
     os.system("condor_submit {0}".format(jdl_filename))
 
 
 # *** 3. Cleanup submission directory
 print "\n##########     Cleanup submission directory     ##########\n"
 os.system("rm *.jdl")
-#os.system("mv {0} {1}/".format(tarball_name, args.outputDir) )

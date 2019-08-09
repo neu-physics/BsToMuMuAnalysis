@@ -6,7 +6,7 @@ process = cms.Process("MuonIsolationAnalyzer")
 
 process.load("FWCore.MessageService.MessageLogger_cfi")
 
-# opt 1: isZmumu, opt2: isPU, opt3: input file
+# opt 2: isZmumu, opt3: isPU, opt4: input file
 #if len(sys.argv) != 4 or len(sys.argv) != 5:
 if len(sys.argv) != 5:
     print('INPUTS INCORRECT. RECIEVED {0} . EXITING\n'.format( sys.argv ) )
@@ -14,14 +14,14 @@ if len(sys.argv) != 5:
     sys.exit()
 
 # boolean for signal/background
-isZmumu = True if sys.argv[1] == 'isZmumu' else False  
+isZmumu = True if sys.argv[2] == 'isZmumu' else False  
 # boolean for 0/200PU
-is200PU = True if sys.argv[2] == 'is200PU' else False 
+is200PU = True if sys.argv[3] == 'is200PU' else False 
 
 #make output file
 os.system('touch tempInputFile.txt')
-os.system('echo {0} tempInputFile.txt'.format(sys.argv[3]) )
-filename = sys.argv[3]
+os.system('echo {0} > tempInputFile.txt'.format(sys.argv[4]) )
+filename = sys.argv[4]
 lastFourFileID = filename[len(filename)-9:len(filename)-5]
 
 #####################################################################################
@@ -60,6 +60,7 @@ process.load('BsToMuMuAnalysis.MuonIsolationAnalyzer.MuonIsolationAnalyzer_cfi')
 muonIsoAnalyzer = process.MuonIsolationAnalyzer
 muonIsoAnalyzer.isZmumuSignal = isZmumu
 
+print("name of fileID: {0}".format(lastFourFileID))
 process.TFileService = cms.Service("TFileService", fileName = cms.string("muonIsolation_output_{0}{1}_{2}.root".format(sample, nPU, lastFourFileID)) )
 
 process.runseq = cms.Sequence()

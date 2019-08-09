@@ -22,6 +22,7 @@ MuonIsolationAnalyzer = cms.EDAnalyzer('MuonIsolationAnalyzer',
                                        #treeName = cms.untracked.string("DumpHits"),
                                        #verbosity = cms.bool(False),
                                        isZmumuSignal = cms.bool(False),
+                                       #lastFourFileID = cms.tracked.string(""),
                                        #dumpRecHits = cms.bool(False)
                                        muonsTag = cms.untracked.InputTag("muons"),
                                        vertexTag = cms.untracked.InputTag("offlinePrimaryVertices"),
