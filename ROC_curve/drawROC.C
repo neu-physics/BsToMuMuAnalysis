@@ -1,9 +1,16 @@
-void drawROC()
+#include "TFile.h"
+#include "string"
+#include "TGraph.h"
+#include "TCanvas.h"
+
+void drawROC(string topDir="")
 {
     gStyle->SetOptStat(0);
     gStyle->SetLegendBorderSize(0);
-    TString s_sig = "01-08-19_0PU/muonIsolation_output_zmumu.root";
-    TString s_bkg = "01-08-19_0PU/muonIsolation_output_ttbar.root";
+    //TString s_sig = "01-08-19_0PU/muonIsolation_output_zmumu.root";
+    //TString s_bkg = "01-08-19_0PU/muonIsolation_output_ttbar.root";
+    TString s_sig = ("zmumu_" + topDir+ "/muonIsolation_output_zmumu_" + topDir + ".root").c_str();
+    TString s_bkg = ("ttbar_" + topDir+ "/muonIsolation_output_ttbar_" + topDir + ".root").c_str();
 
     TFile *f_sig = new TFile(s_sig); 
     TFile *f_bkg = new TFile(s_bkg);
@@ -42,7 +49,7 @@ void drawROC()
     g->GetXaxis()->SetRangeUser(.8, 1);
     g->GetYaxis()->SetRangeUser(0, .6);
 
-    c1->Print("muonIsolationROC.png");
+    c1->Print( ("muonIsolationROC_" + topDir + ".png").c_str() );
 
     /*h_sig->SetLineColor(kRed);
     h_bkg->SetLineColor(kBlack);

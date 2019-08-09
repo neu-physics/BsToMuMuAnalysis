@@ -124,7 +124,8 @@ class MuonIsolationAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResour
       reco::Vertex vertex;
       bool isZmumuSignal_;
       //string lastFourFileID_;
-      vector<const reco::Candidate*> promptMuonTruthCandidates_; float IdentityCut;
+      vector<const reco::Candidate*> promptMuonTruthCandidates_; 
+      float muonIdentityCut;
 
       //---outputs
       TH1* h_event_cutflow_;    
@@ -194,7 +195,7 @@ void
 MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
 {
    using namespace edm;
-   IdentityCut = 0.05;
+   muonIdentityCut = 0.2;
 
    //Handle<TrackCollection> tracks;
    //iEvent.getByToken(tracksToken_, tracks);
@@ -411,7 +412,7 @@ float MuonIsolationAnalyzer::getMuonPFCandIso(const reco::Muon& iMuon, edm::Hand
 {
   float result = 0; 
   float isoCone = 0.3;
-  float identityCone = IdentityCut;
+  float identityCone = 0.05;
   int numberOfAssociatedPFCandidates = 0;
 
    auto pfCandidates = *pfCandHandle.product();
@@ -763,7 +764,7 @@ bool MuonIsolationAnalyzer::isGoodMuon(const reco::Muon& iMuon, edm::Handle<std:
       float Dphi = deltaPhi( iMuon.phi(), promptTruthMuon->phi());
       float DR = sqrt(Deta*Deta+Dphi*Dphi);
       
-      if (DR < IdentityCut)
+      if (DR < muonIdentityCut)
 	recoMuonMatchedToPromptTruth = true;
     }
     if (!recoMuonMatchedToPromptTruth)
@@ -781,7 +782,7 @@ bool MuonIsolationAnalyzer::isGoodMuon(const reco::Muon& iMuon, edm::Handle<std:
       float Dphi = deltaPhi( iMuon.phi(), promptTruthMuon->phi());
       float DR = sqrt(Deta*Deta+Dphi*Dphi);
       
-      if (DR < IdentityCut)
+      if (DR < muonIdentityCut)
 	recoMuonMatchedToPromptTruth = true;
     }
     for( unsigned int iJet = 0; iJet < genJetHandle_->size(); ++iJet ) {
