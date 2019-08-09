@@ -45,7 +45,8 @@ void drawROC(string topDir="")
     g->SetTitle("prompt muon ROC curve(BTL);prompt eff;non-prompt eff");
     //g->GetXaxis()->SetRangeUser(0.8,1);
     //g->GetYaxis()->SetRangeUser(0,0.35);
-    g->Draw("AP*");
+    g->SetLineWidth(3);
+    g->Draw("AL");
     g->GetXaxis()->SetRangeUser(.8, 1);
     g->GetYaxis()->SetRangeUser(0, .6);
 
