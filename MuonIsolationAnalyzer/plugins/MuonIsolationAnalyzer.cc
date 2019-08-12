@@ -51,6 +51,7 @@
 
 #include "DataFormats/Candidate/interface/Candidate.h"
 #include "DataFormats/Math/interface/deltaPhi.h"
+#include "DataFormats/Math/interface/Point3D.h"
 
 #include "DataFormats/ParticleFlowCandidate/interface/PFCandidate.h"
 #include "DataFormats/RecoCandidate/interface/RecoCandidate.h"
@@ -122,6 +123,12 @@ class MuonIsolationAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResour
       edm::Handle<float>                                   genT0Handle_;
 
       reco::Vertex vertex;
+      //SimVertex genPV;
+      math::XYZPoint genVertexPoint;
+      //Point3D genVertexPoint;
+
+      //const SimVertex *genPV;// = NULL;// = SimVertex();
+
       bool isZmumuSignal_;
       //string lastFourFileID_;
       vector<const reco::Candidate*> promptMuonTruthCandidates_; 
@@ -218,12 +225,15 @@ MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
 
    //---get truth PV
    const SimVertex *genPV = NULL;// = SimVertex();
-   if(genVertexHandle_.isValid())
+   if(genVertexHandle_.isValid()){
      //genPV = genVertexHandle_.product()->at(0);
      genPV = &(genVertexHandle_.product()->at(0));
+     auto xyz = genXYZHandle_.product();
+     genVertexPoint = math::XYZPoint(xyz->x(), xyz->y(), xyz->z());
+   }
    else
      {
-       //auto xyz = genXYZHandle_.product();
+       //auto xyz = *genXYZHandle_.product();
        //auto t = *genT0Handle_.product();
        //auto v = math::XYZVectorD(xyz->x(), xyz->y(), xyz->z());
        std::cout << "oh actually sometimes we don't find a gen pv" << std::endl;
@@ -231,6 +241,8 @@ MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
        //genPV = *(SimVertex(v, t));
      }
    
+
+      
    int vtx_index = -1;
    
    //---find the vertex this muon is best associated to..
@@ -266,7 +278,12 @@ MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
    if (vtx_index == -1) // no good PV found
      return;
    vertex = (*vertexHandle_)[vtx_index];
+     
+   //vertex = (*genPV);
+   //vertex = (genVertexHandle_.product()->at(0));
    h_event_cutflow_->Fill("Good Vertex", 1);
+   
+
 
    /*
    int numpv=0; int iPV=0;
@@ -411,15 +428,15 @@ void
 MuonIsolationAnalyzer::endJob()
 {
 }
-
+// start
 float MuonIsolationAnalyzer::getMuonPFCandIso(const reco::Muon& iMuon, edm::Handle<std::vector<reco::PFCandidate> >& pfCandHandle) const
 {
   float sumPFCandPtInCone = 0; 
   float isoCone = 0.3;
   float identityCone = 0.05;
   int numberOfAssociatedPFCandidates = 0;
-
-   auto pfCandidates = *pfCandHandle.product();
+ 
+  auto pfCandidates = *pfCandHandle.product();
 
    for(unsigned iPFCand = 0; iPFCand < pfCandidates.size(); ++iPFCand)   {
      auto pfCandidate = pfCandidates.at(iPFCand);
@@ -437,12 +454,14 @@ float MuonIsolationAnalyzer::getMuonPFCandIso(const reco::Muon& iMuon, edm::Hand
        if (track->pt() < 0.7)
 	 continue;
 
-       h_muon_pfCandIso03_dxy_BTL_->Fill(fabs(track->dxy(vertex.position())));
-       h_muon_pfCandIso03_dz_BTL_->Fill(fabs(track->dz(vertex.position())));
+       //h_muon_pfCandIso03_dxy_BTL_->Fill(fabs(track->dxy(vertex.position())));
+       //h_muon_pfCandIso03_dz_BTL_->Fill(fabs(track->dz(vertex.position())));
+       h_muon_pfCandIso03_dxy_BTL_->Fill(fabs(track->dxy(genVertexPoint)));
+       h_muon_pfCandIso03_dz_BTL_->Fill(fabs(track->dz(genVertexPoint)));
 
-       if ( fabs(track->dz(vertex.position())) > 0.1 )
+       if ( fabs(track->dz(genVertexPoint)) > 0.1 )
 	 continue;
-       if ( fabs(track->dxy(vertex.position()))>0.02 )
+       if ( fabs(track->dxy(genVertexPoint))>0.02 )
 	 continue;
 
        // sum candidates in cone
@@ -458,10 +477,10 @@ float MuonIsolationAnalyzer::getMuonPFCandIso(const reco::Muon& iMuon, edm::Hand
 
      }
      else if ( fabs(track->eta())>1.5 && fabs(track->eta())<2.8) { // ETL acceptance
-       //std::cout << "ETL  " << fabs(track->dz(vertex.position())) << std::endl;
+       //std::cout << "ETL  " << fabs(track->dz(genVertexPoint)) << std::endl;
        if (track->pt() < 0.4)
 	 continue;
-       if ( fabs(track->dz(vertex.position())) > 0.2 )
+       if ( fabs(track->dz(genVertexPoint)) > 0.2 )
          continue;
        
        //sumPFCandPtInCone = -1;
@@ -769,15 +788,15 @@ bool MuonIsolationAnalyzer::isGoodMuon(const reco::Muon& iMuon, edm::Handle<std:
     return false;
 
   // *** 3. d0 cut
-  if ( fabs(iMuon.muonBestTrack()->dxy(vertex.position())) > 0.2 )
+  if ( fabs(iMuon.muonBestTrack()->dxy(genVertexPoint)) > 0.2 )
     return false;
   h_muon_cutflow_->Fill("d0 < 0.2 cm", 1);
   
   // *** 4. z0 cut
-  if ( fabs(iMuon.muonBestTrack()->dz(vertex.position())) > 0.5 )
+  if ( fabs(iMuon.muonBestTrack()->dz(genVertexPoint)) > 0.5 )
     return false;
   h_muon_cutflow_->Fill("z0 < 0.5 cm", 1);
-  
+  // end
 
   bool recoMuonMatchedToPromptTruth = false;
   // *** 5A. accept only prompt muons if Z->mumu signal
