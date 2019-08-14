@@ -30,9 +30,11 @@ void drawROC(string topDir="")
     
     std::vector<float> sigPoints(nbins);
     std::vector<float> bkgPoints(nbins);
-    for ( int i = 0; i < nbins; ++i ) {
-    float sig_slice_integral = h_sig->Integral(1,i+1);
-    float bkg_slice_integral = h_bkg->Integral(1,i+1);
+    int firstBin = 1;
+
+    for ( int i = firstBin; i < nbins; ++i ) {
+    float sig_slice_integral = h_sig->Integral(firstBin,i+1);
+    float bkg_slice_integral = h_bkg->Integral(firstBin,i+1);
     sigPoints.push_back(sig_slice_integral/sig_integral);
     bkgPoints.push_back(bkg_slice_integral/bkg_integral);
     //std::cout << "sig:" << sig_slice_integral << std::endl;
@@ -47,8 +49,8 @@ void drawROC(string topDir="")
     //g->GetYaxis()->SetRangeUser(0,0.35);
     g->SetLineWidth(3);
     g->Draw("AL");
-    g->GetXaxis()->SetRangeUser(.8, 1);
-    g->GetYaxis()->SetRangeUser(0, .6);
+    g->GetXaxis()->SetRangeUser(.84, 1.01);
+    g->GetYaxis()->SetRangeUser(0, .5);
 
     c1->Print( ("muonIsolationROC_" + topDir + ".png").c_str() );
 

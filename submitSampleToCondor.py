@@ -70,7 +70,7 @@ for line in txtfile:
     lastFourFileID = infile[len(infile)-9:len(infile)-5] # get last four digits of filename
     jdl_filename = "submitOneFile_{0}_{1}.jdl".format(args.outputDir, lastFourFileID)
     isZmumu = 'isZmumu' if 'zmumu' in args.inputTXTfile else 'isTTbar'
-    is200PU = 'is200PU' if 'pu' in args.inputTXTfile else 'is0PU'
+    is200PU = 'is200PU' if 'PU' in args.inputTXTfile else 'is0PU'
 
     os.system("touch {0}".format(jdl_filename))
     os.system("echo universe = vanilla > {0}".format(jdl_filename))
