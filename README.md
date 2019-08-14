@@ -1,6 +1,6 @@
 # Studies to show improvements in Bs->mumu studies at CMS using MTD information
 
-Code written in CMSSW_10_4_0_mtd5 using an SL7 architecture. You can probably check out and compile code in SL6 but this remains to be tested.
+Code written in CMSSW_10_4_0_mtd5 using an SL7 architecture. You can also check out and compile code in SL6.
 
 ## Samples
 
@@ -11,3 +11,7 @@ For ttbar "fake" muons, /RelValTTbar_Tauola_14TeV/CMSSW_10_4_0_mtd5-103X_upgrade
 ## Running muon isolation studies
 
 >$ cmsRun BsToMuMuAnalysis/MuonIsolationAnalyzer/test/produceROCCurve.py
+
+## Using Condor Batch on LPC
+
+>$ source submitSampleToCondor.py <date>_<version number>
