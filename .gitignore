@@ -4,3 +4,4 @@ test_*
 *.tar.gz
 *-19*
 docker*
+*.root

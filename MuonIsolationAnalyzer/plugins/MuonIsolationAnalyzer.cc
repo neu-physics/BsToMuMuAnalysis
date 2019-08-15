@@ -83,7 +83,7 @@ class MuonIsolationAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResour
 
       static void fillDescriptions(edm::ConfigurationDescriptions& descriptions);
       float getMuonPFRelIso(const reco::Muon&) const;
-      float getMuonPFCandIso(const reco::Muon&, edm::Handle<std::vector<reco::PFCandidate> >& pfCandHandle) const;
+      float getMuonPFCandIso(const reco::Muon&, edm::Handle<std::vector<reco::PFCandidate> >& pfCandHandle, const SimVertex *genPV) const;
       bool  isGoodMuon(const reco::Muon&, edm::Handle<std::vector<reco::GenJet> >& genJetHandle) const;
       int   ttbarDecayMode(edm::Handle<std::vector<reco::GenParticle> >& genHandle);
       void  getPromptTruthMuons(edm::Handle<std::vector<reco::GenParticle> >& genHandle);
@@ -366,7 +366,7 @@ MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
      // ** A. "Analysis-like" isolation borrowed from ttH
      float pfRelIso03 = getMuonPFRelIso( muon );
      // ** B. "TDR-like" isolation using PFCandidates
-     float pfCandIso03 = getMuonPFCandIso( muon, pfCandHandle_ );
+     float pfCandIso03 = getMuonPFCandIso( muon, pfCandHandle_, genPV );
 
      h_muon_pT->Fill(muon.pt());     
 
@@ -449,7 +449,7 @@ MuonIsolationAnalyzer::endJob()
 {
 }
 // start
-float MuonIsolationAnalyzer::getMuonPFCandIso(const reco::Muon& iMuon, edm::Handle<std::vector<reco::PFCandidate> >& pfCandHandle) const
+float MuonIsolationAnalyzer::getMuonPFCandIso(const reco::Muon& iMuon, edm::Handle<std::vector<reco::PFCandidate> >& pfCandHandle, const SimVertex *genPV) const
 {
   float sumPFCandPtInCone = 0.0; 
   float isoCone = 0.3;
@@ -463,67 +463,47 @@ float MuonIsolationAnalyzer::getMuonPFCandIso(const reco::Muon& iMuon, edm::Hand
      auto pfCandidate = pfCandidates.at(iPFCand);
      h_muon_pfCandpT->Fill(pfCandidate.pt());
      h_pfCandidate_cutflow_->Fill("PF Candidate", 1);
-     /*
-     if (pfCandidate.particleId()==reco::PFCandidate::h && pfCandidate.charge()==0)
-       std::cout << "h has ==0 charge" << std::endl;
-     if (pfCandidate.particleId()==reco::PFCandidate::e && pfCandidate.charge()==0)
-       std::cout << "e has ==0 charge" << std::endl;
-     if (pfCandidate.particleId()==reco::PFCandidate::mu && pfCandidate.charge()==0)
-       std::cout << "mu has ==0 charge" << std::endl;
-     if (pfCandidate.particleId()==reco::PFCandidate::gamma && pfCandidate.charge()==0)
-       std::cout << "gamma has ==0 charge" << std::endl;
-     if (pfCandidate.particleId()==reco::PFCandidate::h0 && pfCandidate.charge()==0)
-       std::cout << "h0 has ==0 charge" << std::endl;
-     if (pfCandidate.particleId()==reco::PFCandidate::h_HF && pfCandidate.charge()==0)
-       std::cout << "h_HF has ==0 charge" << std::endl;
-     if (pfCandidate.particleId()==reco::PFCandidate::egamma_HF && pfCandidate.charge()==0)
-       std::cout << "egamma_HF has ==0 charge" << std::endl;
-     if (pfCandidate.particleId()==reco::PFCandidate::h0 && pfCandidate.charge()==0)
-       std::cout << "h0 has ==0 charge" << std::endl;
-     if (pfCandidate.particleId()==reco::PFCandidate::X && pfCandidate.charge()==0)
-       std::cout << "X has ==0 charge" << std::endl;
-     */
-
-     if (pfCandidate.particleId()<4 && pfCandidate.charge()==0)
-       std::cout << "11111111111111111111111111    charged PFCand by ID but charge==0" << std::endl;
-     if (pfCandidate.particleId()>=4 && pfCandidate.charge()!=0)
-       std::cout << "22222222222222222222222222    neutral PFCand by ID but charge!=0" << std::endl;
 
      // skip neutrals
      if (pfCandidate.charge()==0) 
        continue;
      h_pfCandidate_cutflow_->Fill("Charge != 0", 1);
 
-     reco::TrackRef track = pfCandidate.trackRef();
+     reco::TrackRef pfTrack = pfCandidate.trackRef();
      
-     //if (track->quality(reco::TrackBase::highPurity) != track->highPurity())
-     //  std::cout << " ]]]]]]]]]]]@@@@@@@@@@@|||||||||||||  track->quality(reco::TrackBase::highPurity) != track->highPurity()" << std::endl;
-
-     //if(track.isNull() || !track->highPurity() )
-     if(track.isNull() || !track->quality(reco::TrackBase::highPurity))
+     // keep PFCands with good tracks
+     if(pfTrack.isNull())
+       continue;
+     if(!pfTrack->quality(reco::TrackBase::highPurity))
        continue;
      h_pfCandidate_cutflow_->Fill("HighPurity Track", 1);
 
+     // reject PFCands matching muon track
+     if ( pfTrack == iMuon.track() )
+       continue;
+     h_pfCandidate_cutflow_->Fill("no muonRef match", 1);
+
+     // calculate dxy/dz 
+     float dz_sim  = std::abs( pfTrack->vz() - genPV->position().z() ); 
+     float dxy_sim = sqrt ( pow(pfTrack->vx() - genPV->position().x(),2) + pow(pfTrack->vy() - genPV->position().y(),2) ); 
+
      // kinematic cuts on PF candidate
-     //if ( fabs(track->eta())<1.5){ // BTL acceptance
-     if ( fabs(iMuon.eta())<1.5){ // BTL acceptance
+     if ( fabs(pfCandidate.eta())<1.5){ // BTL acceptance
        h_pfCandidate_cutflow_->Fill("In BTL Volume", 1);
      
        //std::cout << "BTL  " << fabs(track->dz(vertex.position())) << std::endl;
-       if (track->pt() < 0.7)
+       if (pfTrack->pt() < 0.7)
 	 continue;
        h_pfCandidate_cutflow_->Fill("pT > 0.7 GeV", 1);
        
-       //h_muon_pfCandIso03_dxy_BTL_->Fill(fabs(track->dxy(vertex.position())));
-       //h_muon_pfCandIso03_dz_BTL_->Fill(fabs(track->dz(vertex.position())));
-       h_muon_pfCandIso03_dxy_BTL_->Fill(fabs(track->dxy(genVertexPoint)));
-       h_muon_pfCandIso03_dz_BTL_->Fill(fabs(track->dz(genVertexPoint)));
+       h_muon_pfCandIso03_dxy_BTL_->Fill( dxy_sim );
+       h_muon_pfCandIso03_dz_BTL_->Fill( dz_sim );
        
-       if ( fabs(track->dz(genVertexPoint)) > 0.1 )
+       if ( dz_sim > 0.1 )
 	 continue;
        h_pfCandidate_cutflow_->Fill("dz < 0.1", 1);
        
-       if ( fabs(track->dxy(genVertexPoint))>0.02 )
+       if ( dxy_sim > 0.02 )
 	 continue;
        h_pfCandidate_cutflow_->Fill("dxy < 0.02", 1);
        
@@ -532,13 +512,6 @@ float MuonIsolationAnalyzer::getMuonPFCandIso(const reco::Muon& iMuon, edm::Hand
        float Dphi = deltaPhi( iMuon.phi(), pfCandidate.phi());
        float DR = sqrt(Deta*Deta+Dphi*Dphi);
        
-       reco::MuonRef muonRef = pfCandidate.muonRef();
-       if ( !muonRef.isNull() && (muonRef->eta() == iMuon.eta()) )
-	 continue;
-       //std::cout << " ******* oh this muonRef might be useful" << std::endl;
-       h_pfCandidate_cutflow_->Fill("no muonRef match", 1);
-       
-       
        if (DR < isoCone){
 	 numberOfAssociatedPFCandidates++;
 	 sumPFCandPtInCone += pfCandidate.pt();
@@ -546,11 +519,11 @@ float MuonIsolationAnalyzer::getMuonPFCandIso(const reco::Muon& iMuon, edm::Hand
        
      }
      //else if ( fabs(track->eta())>1.5 && fabs(track->eta())<2.8) { // ETL acceptance
-     else if ( fabs(iMuon.eta())>1.5 && fabs(iMuon.eta())<2.8) { // ETL acceptance
+     else if ( fabs(pfCandidate.eta())>1.5 && fabs(pfCandidate.eta())<2.8) { // ETL acceptance
        //std::cout << "ETL  " << fabs(track->dz(genVertexPoint)) << std::endl;
-       if (track->pt() < 0.4)
+       if (pfTrack->pt() < 0.4)
 	 continue;
-       if ( fabs(track->dz(genVertexPoint)) > 0.2 )
+       if ( fabs(pfTrack->dz(genVertexPoint)) > 0.2 )
          continue;
        
        //sumPFCandPtInCone = -1;
@@ -849,22 +822,26 @@ bool MuonIsolationAnalyzer::isGoodMuon(const reco::Muon& iMuon, edm::Handle<std:
   h_muon_cutflow_->Fill("Loose ID", 1);
 
   // *** just check to make sure muon track available
-  if ( !(iMuon.muonBestTrack().isAvailable()) )
+  if (iMuon.track().isNull()) 
     return false;
+  // -- minimal checks
+  // old, 08-15-19
+  //if ( !(iMuon.muonBestTrack().isAvailable()) )
+  //  return false;
 
   // temp 08-13-19, BBT
   if (fabs(iMuon.eta())<1.5){
-    h_muon_dxy_BTL_->Fill( fabs(iMuon.muonBestTrack()->dxy(genVertexPoint)) );
-    h_muon_dz_BTL_->Fill( fabs(iMuon.muonBestTrack()->dz(genVertexPoint)) );
+    h_muon_dxy_BTL_->Fill( fabs(iMuon.track()->dxy(genVertexPoint)) );
+    h_muon_dz_BTL_->Fill( fabs(iMuon.track()->dz(genVertexPoint)) );
   }
 
   // *** 3. d0 cut
-  if ( fabs(iMuon.muonBestTrack()->dxy(genVertexPoint)) > 0.2 )
+  if ( fabs(iMuon.track()->dxy(genVertexPoint)) > 0.2 )
     return false;
   h_muon_cutflow_->Fill("d0 < 0.2 cm", 1);
   
   // *** 4. z0 cut
-  if ( fabs(iMuon.muonBestTrack()->dz(genVertexPoint)) > 0.5 )
+  if ( fabs(iMuon.track()->dz(genVertexPoint)) > 0.5 )
     return false;
   h_muon_cutflow_->Fill("z0 < 0.5 cm", 1);
   // end
@@ -888,7 +865,6 @@ bool MuonIsolationAnalyzer::isGoodMuon(const reco::Muon& iMuon, edm::Handle<std:
   }
   // *** 5B. reject prompt muons if ttbar background
   else if (!isZmumuSignal_) {
-    recoMuonMatchedToPromptTruth = false
     bool recoMuonMatchedToGenJet = false;
     for( unsigned int iTruthMuon = 0; iTruthMuon < promptMuonTruthCandidates_.size(); iTruthMuon++){
       const reco::Candidate * promptTruthMuon = (promptMuonTruthCandidates_[iTruthMuon]);
@@ -900,13 +876,13 @@ bool MuonIsolationAnalyzer::isGoodMuon(const reco::Muon& iMuon, edm::Handle<std:
 	recoMuonMatchedToPromptTruth = true;
     }
 
-    auto jets = *genJetHandle_.product();
-    for( unsigned int iJet = 0; iJet < genJetHandle_->size(); ++iJet ) {
+    auto genJets = *genJetHandle_.product();
+    for( unsigned int iGenJet = 0; iGenJet < genJetHandle_->size(); ++iGenJet ) {
       //iEvent.getByToken(genJetToken_, genJetHandle_);
-      auto jet = jets.at(iJet);
-      if (jet.pt()<15) continue;
-      float Deta_jet = iMuon.eta() - jet.eta();
-      float Dphi_jet = deltaPhi( iMuon.phi(), jet.phi()); 
+      auto genJet = genJets.at(iGenJet);
+      if (genJet.pt()<15 || (genJet.hadEnergy()/genJet.energy() < 0.3) ) continue;
+      float Deta_jet = iMuon.eta() - genJet.eta();
+      float Dphi_jet = deltaPhi( iMuon.phi(), genJet.phi()); 
       float DR_jet = sqrt(Deta_jet*Deta_jet+Dphi_jet*Dphi_jet);            
       if (DR_jet < 0.3)
 	recoMuonMatchedToGenJet = true;
