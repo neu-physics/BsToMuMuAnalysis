@@ -56,6 +56,8 @@
 #include "DataFormats/ParticleFlowCandidate/interface/PFCandidate.h"
 #include "DataFormats/RecoCandidate/interface/RecoCandidate.h"
 
+#include "BsToMuMuAnalysis/MuonIsolationAnalyzer/interface/Utils.h"
+
 #include "TH1.h"
 #include "TH2.h"
 
@@ -90,6 +92,7 @@ class MuonIsolationAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResour
       const reco::Candidate * GetObjectJustBeforeDecay( const reco::Candidate * particle );
       bool WBosonDecaysProperly( const reco::Candidate *W );
       int WBosonDecayMode( const reco::Candidate *W );
+      bool passDeltaR( float coneSize, float eta1, float phi1, float eta2, float phi2) const;
 
    private:
       virtual void beginJob() override;
@@ -132,7 +135,9 @@ class MuonIsolationAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResour
       bool isZmumuSignal_;
       //string lastFourFileID_;
       vector<const reco::Candidate*> promptMuonTruthCandidates_; 
-      float muonIdentityCut;
+      float coneSize_muonToGetJet;
+      float coneSize_muonToPromptTruth;
+
       float pfCandIdentityCut;
       double nPromptMuons;
       double nNonPromptMuons;
@@ -212,7 +217,8 @@ void
 MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
 {
    using namespace edm;
-   muonIdentityCut = 0.2;
+   coneSize_muonToGetJet = 0.3;
+   coneSize_muonToPromptTruth = 0.2;
 
    //Handle<TrackCollection> tracks;
    //iEvent.getByToken(tracksToken_, tracks);
@@ -508,6 +514,11 @@ float MuonIsolationAnalyzer::getMuonPFCandIso(const reco::Muon& iMuon, edm::Hand
        h_pfCandidate_cutflow_->Fill("dxy < 0.02", 1);
        
        // sum candidates in cone
+       if ( passDeltaR( isoCone, iMuon.eta(), iMuon.phi(), pfCandidate.eta(), pfCandidate.phi()) ) {
+	 numberOfAssociatedPFCandidates++;
+	 sumPFCandPtInCone += pfCandidate.pt();
+       }
+       /*
        float Deta = iMuon.eta() - pfCandidate.eta();
        float Dphi = deltaPhi( iMuon.phi(), pfCandidate.phi());
        float DR = sqrt(Deta*Deta+Dphi*Dphi);
@@ -516,7 +527,7 @@ float MuonIsolationAnalyzer::getMuonPFCandIso(const reco::Muon& iMuon, edm::Hand
 	 numberOfAssociatedPFCandidates++;
 	 sumPFCandPtInCone += pfCandidate.pt();
        }
-       
+       */
      }
      //else if ( fabs(track->eta())>1.5 && fabs(track->eta())<2.8) { // ETL acceptance
      else if ( fabs(pfCandidate.eta())>1.5 && fabs(pfCandidate.eta())<2.8) { // ETL acceptance
@@ -803,7 +814,6 @@ int MuonIsolationAnalyzer::ttbarDecayMode(edm::Handle<std::vector<reco::GenParti
 
 bool MuonIsolationAnalyzer::isGoodMuon(const reco::Muon& iMuon, edm::Handle<std::vector<reco::GenJet> >& genJetHandle) const
 {
-  
   h_muon_cutflow_->Fill("All Muons", 1);
   // *** 0. pT > 20 GeV ---> may need to change this for Bs->mumu studies, but keep for now to reproduce TDR results
   if (iMuon.pt() < 20.)
@@ -824,12 +834,8 @@ bool MuonIsolationAnalyzer::isGoodMuon(const reco::Muon& iMuon, edm::Handle<std:
   // *** just check to make sure muon track available
   if (iMuon.track().isNull()) 
     return false;
-  // -- minimal checks
-  // old, 08-15-19
-  //if ( !(iMuon.muonBestTrack().isAvailable()) )
-  //  return false;
 
-  // temp 08-13-19, BBT
+  // some plots
   if (fabs(iMuon.eta())<1.5){
     h_muon_dxy_BTL_->Fill( fabs(iMuon.track()->dxy(genVertexPoint)) );
     h_muon_dz_BTL_->Fill( fabs(iMuon.track()->dz(genVertexPoint)) );
@@ -849,15 +855,16 @@ bool MuonIsolationAnalyzer::isGoodMuon(const reco::Muon& iMuon, edm::Handle<std:
   bool recoMuonMatchedToPromptTruth = false;
   // *** 5A. accept only prompt muons if Z->mumu signal
   if (isZmumuSignal_) {
+
+    recoMuonMatchedToPromptTruth = isPromptMuon(iMuon, );
+    
+    /*
     for( unsigned int iTruthMuon = 0; iTruthMuon < promptMuonTruthCandidates_.size(); iTruthMuon++){
       const reco::Candidate * promptTruthMuon = ( promptMuonTruthCandidates_[iTruthMuon]);
-      float Deta = iMuon.eta() - promptTruthMuon->eta();
-      float Dphi = deltaPhi( iMuon.phi(), promptTruthMuon->phi());
-      float DR = sqrt(Deta*Deta+Dphi*Dphi);
       
-      if (DR < muonIdentityCut)
+      if ( passDeltaR( coneSize_muonToPromptTruth, iMuon.eta(), iMuon.phi(), promptTruthMuon->eta(), promptTruthMuon->phi()) == true)
 	recoMuonMatchedToPromptTruth = true;
-    }
+	}*/
     if (!recoMuonMatchedToPromptTruth)
       return false;
     h_muon_cutflow_->Fill("Signal Prompt Muon", 1);
@@ -866,43 +873,52 @@ bool MuonIsolationAnalyzer::isGoodMuon(const reco::Muon& iMuon, edm::Handle<std:
   // *** 5B. reject prompt muons if ttbar background
   else if (!isZmumuSignal_) {
     bool recoMuonMatchedToGenJet = false;
+
+    // ** i. Test if muon is prompt
     for( unsigned int iTruthMuon = 0; iTruthMuon < promptMuonTruthCandidates_.size(); iTruthMuon++){
       const reco::Candidate * promptTruthMuon = (promptMuonTruthCandidates_[iTruthMuon]);
-      float Deta = iMuon.eta() - promptTruthMuon->eta();
-      float Dphi = deltaPhi( iMuon.phi(), promptTruthMuon->phi());
-      float DR = sqrt(Deta*Deta+Dphi*Dphi);
-      
-      if (DR < muonIdentityCut)
+
+      if ( passDeltaR( coneSize_muonToPromptTruth, iMuon.eta(), iMuon.phi(), promptTruthMuon->eta(), promptTruthMuon->phi()) )
 	recoMuonMatchedToPromptTruth = true;
     }
 
+    // ** ii. Test if muon matches genJet
     auto genJets = *genJetHandle_.product();
     for( unsigned int iGenJet = 0; iGenJet < genJetHandle_->size(); ++iGenJet ) {
       //iEvent.getByToken(genJetToken_, genJetHandle_);
       auto genJet = genJets.at(iGenJet);
       if (genJet.pt()<15 || (genJet.hadEnergy()/genJet.energy() < 0.3) ) continue;
-      float Deta_jet = iMuon.eta() - genJet.eta();
-      float Dphi_jet = deltaPhi( iMuon.phi(), genJet.phi()); 
-      float DR_jet = sqrt(Deta_jet*Deta_jet+Dphi_jet*Dphi_jet);            
-      if (DR_jet < 0.3)
+
+      if ( passDeltaR( coneSize_muonToGetJet, iMuon.eta(), iMuon.phi(), genJet.eta(), genJet.phi()) )
 	recoMuonMatchedToGenJet = true;
     }
+
+    // ** iii. Test if muon matches tau
+
+    // ** iv. Muon is "good" non-prompt if !truthMatched && genJetMatched && !tauMatched
     if ( !recoMuonMatchedToPromptTruth && recoMuonMatchedToGenJet ) {
       h_muon_cutflow_->Fill("Non-prompt Bkg Muon", 1);
-      //nNonPromptMuons++;
     }
     else 
       return false;
-  
-   /*if ((recoMuonMatchedToPromptTruth) || (! recoMuonMatchedToGenJet))
-      return false;
-    h_muon_cutflow_->Fill("Non-prompt Bkg Muon", 1);
-    nNonPromptMuons++;
-    */
-
   }
 
   return true;
+
+}
+
+// ------------ function to one-line-ize deltaR logic ------------
+bool MuonIsolationAnalyzer::passDeltaR( float coneSize, float eta1, float phi1, float eta2, float phi2) const
+{
+  
+  float d_eta = eta1 - eta2;
+  float d_phi = phi1 - phi2;
+  float dR = sqrt( d_eta*d_eta + d_phi*d_phi);            
+
+  if (dR < coneSize)
+    return true;
+  else
+    return false;
 
 }
 

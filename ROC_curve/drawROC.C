@@ -49,8 +49,8 @@ void drawROC(string topDir="")
     //g->GetYaxis()->SetRangeUser(0,0.35);
     g->SetLineWidth(3);
     g->Draw("AL");
-    g->GetXaxis()->SetRangeUser(.8, 1.01);
-    g->GetYaxis()->SetRangeUser(0, .6);
+    g->GetXaxis()->SetRangeUser(.85, 1.01);
+    g->GetYaxis()->SetRangeUser(0, .1);
 
     c1->Print( ("muonIsolationROC_" + topDir + ".png").c_str() );
 
