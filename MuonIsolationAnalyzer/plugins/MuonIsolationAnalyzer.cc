@@ -86,7 +86,7 @@ class MuonIsolationAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResour
       static void fillDescriptions(edm::ConfigurationDescriptions& descriptions);
       float getMuonPFRelIso(const reco::Muon&) const;
       float getMuonPFCandIso(const reco::Muon&, edm::Handle<std::vector<reco::PFCandidate> >& pfCandHandle, const SimVertex *genPV) const;
-      bool  isGoodMuon(const reco::Muon&, edm::Handle<std::vector<reco::GenJet> >& genJetHandle) const;
+      bool  isGoodMuon(const reco::Muon&,  edm::Handle<std::vector<reco::GenParticle> >& genHandle, edm::Handle<std::vector<reco::GenJet> >& genJetHandle) const;
       int   ttbarDecayMode(edm::Handle<std::vector<reco::GenParticle> >& genHandle);
       void  getPromptTruthMuons(edm::Handle<std::vector<reco::GenParticle> >& genHandle);
       const reco::Candidate * GetObjectJustBeforeDecay( const reco::Candidate * particle );
@@ -365,7 +365,7 @@ MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
    for(unsigned iMuon = 0; iMuon < muons.size(); ++iMuon)   {
      auto muon = muons.at(iMuon);
      
-     if ( !isGoodMuon( muon, genJetHandle_ )) continue;
+     if ( !isGoodMuon( muon, genHandle_, genJetHandle_ )) continue;
      h_event_nPromptMuons_->Fill( nPromptMuons ) ;
      h_event_nNonPromptMuons_->Fill( nNonPromptMuons ) ;
 
@@ -812,7 +812,7 @@ int MuonIsolationAnalyzer::ttbarDecayMode(edm::Handle<std::vector<reco::GenParti
   return decayMode;
 }
 
-bool MuonIsolationAnalyzer::isGoodMuon(const reco::Muon& iMuon, edm::Handle<std::vector<reco::GenJet> >& genJetHandle) const
+bool MuonIsolationAnalyzer::isGoodMuon(const reco::Muon& iMuon, edm::Handle<std::vector<reco::GenParticle> >& genHandle, edm::Handle<std::vector<reco::GenJet> >& genJetHandle) const
 {
   h_muon_cutflow_->Fill("All Muons", 1);
   // *** 0. pT > 20 GeV ---> may need to change this for Bs->mumu studies, but keep for now to reproduce TDR results
@@ -852,12 +852,17 @@ bool MuonIsolationAnalyzer::isGoodMuon(const reco::Muon& iMuon, edm::Handle<std:
   h_muon_cutflow_->Fill("z0 < 0.5 cm", 1);
   // end
 
-  bool recoMuonMatchedToPromptTruth = false;
+  
+  //bool recoMuonMatchedToPromptTruth = false;
+  //bool recoMuonMatchedToGenJet = false;
+  
+  // calculate some booleans
+  bool recoMuonMatchedToPromptTruth = isPromptMuon(iMuon, genHandle);
+  bool recoMuonMatchedToGenJet      = isMatchedToGenJet(iMuon, genJetHandle);
+  bool recoMuonFromTau              = isFromTau(iMuon, genHandle);
+
   // *** 5A. accept only prompt muons if Z->mumu signal
   if (isZmumuSignal_) {
-
-    recoMuonMatchedToPromptTruth = isPromptMuon(iMuon, );
-    
     /*
     for( unsigned int iTruthMuon = 0; iTruthMuon < promptMuonTruthCandidates_.size(); iTruthMuon++){
       const reco::Candidate * promptTruthMuon = ( promptMuonTruthCandidates_[iTruthMuon]);
@@ -872,8 +877,7 @@ bool MuonIsolationAnalyzer::isGoodMuon(const reco::Muon& iMuon, edm::Handle<std:
   }
   // *** 5B. reject prompt muons if ttbar background
   else if (!isZmumuSignal_) {
-    bool recoMuonMatchedToGenJet = false;
-
+    /*
     // ** i. Test if muon is prompt
     for( unsigned int iTruthMuon = 0; iTruthMuon < promptMuonTruthCandidates_.size(); iTruthMuon++){
       const reco::Candidate * promptTruthMuon = (promptMuonTruthCandidates_[iTruthMuon]);
@@ -894,9 +898,9 @@ bool MuonIsolationAnalyzer::isGoodMuon(const reco::Muon& iMuon, edm::Handle<std:
     }
 
     // ** iii. Test if muon matches tau
-
+    */
     // ** iv. Muon is "good" non-prompt if !truthMatched && genJetMatched && !tauMatched
-    if ( !recoMuonMatchedToPromptTruth && recoMuonMatchedToGenJet ) {
+    if ( !recoMuonMatchedToPromptTruth && recoMuonMatchedToGenJet && !recoMuonFromTau) {
       h_muon_cutflow_->Fill("Non-prompt Bkg Muon", 1);
     }
     else 

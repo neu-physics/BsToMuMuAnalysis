@@ -41,10 +41,16 @@
 using namespace std;
 using namespace edm;
 using namespace reco;
-
+/* Martina version, 08-15-19
 bool isPromptMuon(const reco::Muon &muon, const edm::View<reco::GenParticle>& genParticles);
 bool isMatchedToGenJet(const reco::Muon &muon, const edm::View<reco::GenJet>& genJet);
 bool isFromTau(const reco::Muon &muon, const edm::View<reco::GenParticle>& genParticles);
+*/
+// Ben version, 08-16-19
+bool isPromptMuon(const reco::Muon &muon, edm::Handle<std::vector<reco::GenParticle> >& genHandle);
+bool isMatchedToGenJet(const reco::Muon &muon, edm::Handle<std::vector<reco::GenJet> >& genJetHandle);
+bool isFromTau(const reco::Muon &muon, edm::Handle<std::vector<reco::GenParticle> >& genHandle);
+
 bool isMatchedToGenParticle(const reco::PFCandidate &pfcand, const edm::View<reco::GenParticle>& genParticles);
 bool isUnmatchedToGenParticle(const reco::PFCandidate &pfcand, const edm::View<reco::GenParticle>& genParticles);
 

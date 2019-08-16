@@ -3,16 +3,19 @@
 #include "BsToMuMuAnalysis/MuonIsolationAnalyzer/interface/Utils.h"
 
 // --- matching to gen muon ----------------------------------------------------------------
-bool isPromptMuon(const reco::Muon& muon, const edm::View<reco::GenParticle>& genParticles)
+bool isPromptMuon(const reco::Muon& muon, edm::Handle<std::vector<reco::GenParticle> >& genHandle)
 {
   bool isPrompt = false;
   float drmin = 9999.;
+
+  auto genParticles = *genHandle.product();
   for(unsigned int ip=0; ip < genParticles.size(); ip++ ){
-    const reco::GenParticle& genp = genParticles[ip];
-    if ( std::abs(genp.pdgId()) != 13) continue;
-    if (genp.status() != 1 || !genp.isLastCopy() ) continue; // -- from Simone                                                                                                                                                          
-    if ( !genp.isPromptFinalState() ) continue;
-    double dr = deltaR(muon,genp);
+    auto genParticle = genParticles.at(ip);
+    //const reco::GenParticle& genp = genParticles[ip];
+    if ( std::abs(genParticle.pdgId()) != 13) continue;
+    if (genParticle.status() != 1 || !genParticle.isLastCopy() ) continue; // -- from Simone                                                                                                                                                          
+    if ( !genParticle.isPromptFinalState() ) continue;
+    double dr = deltaR(muon,genParticle);
     if (dr > 0.2){
       continue;
     }
@@ -33,14 +36,16 @@ bool isPromptMuon(const reco::Muon& muon, const edm::View<reco::GenParticle>& ge
 
 
 // --- matching to gen jet ------------------------------------------------------------------
-bool isMatchedToGenJet(const reco::Muon& muon, const edm::View<reco::GenJet>& genJets)
+bool isMatchedToGenJet(const reco::Muon& muon, edm::Handle<std::vector<reco::GenJet> >& genJetHandle)
 {
   bool isMatched = false;
 
-  for(unsigned int ip=0; ip < genJets.size(); ip++ ){
-    const reco::GenJet& genj = genJets[ip];
-    if ( genj.pt() < 15.0  || genj.hadEnergy()/genj.energy() < 0.3) continue;
-    double dr = deltaR(muon,genj);
+  auto genJets = *genJetHandle.product();
+  for( unsigned int iGenJet = 0; iGenJet < genJetHandle->size(); ++iGenJet ) {
+    auto genJet = genJets.at(iGenJet);
+
+    if ( genJet.pt() < 15.0  || genJet.hadEnergy()/genJet.energy() < 0.3) continue;
+    double dr = deltaR(muon,genJet);
     if (dr > 0.3){
       continue;
     }
@@ -57,16 +62,18 @@ bool isMatchedToGenJet(const reco::Muon& muon, const edm::View<reco::GenJet>& ge
 
 
 // --- matching to muons from tau decays ----------------------------------------------------
-bool isFromTau(const reco::Muon& muon, const edm::View<reco::GenParticle>& genParticles)
+bool isFromTau(const reco::Muon& muon, edm::Handle<std::vector<reco::GenParticle> >& genHandle)
 {
 
   bool fromTau = false;
 
+  auto genParticles = *genHandle.product();
   for(unsigned int ip=0; ip < genParticles.size(); ip++ ){
-    const reco::GenParticle& genp = genParticles[ip];
-    if ( std::abs(genp.pdgId()) != 13) continue;
-    if ( !genp.isDirectPromptTauDecayProductFinalState() ) continue;
-    double dr = deltaR(muon,genp);
+    auto genParticle = genParticles.at(ip);
+
+    if ( std::abs(genParticle.pdgId()) != 13) continue;
+    if ( !genParticle.isDirectPromptTauDecayProductFinalState() ) continue;
+    double dr = deltaR(muon,genParticle);
     if (dr > 0.2){
       continue;
     }
