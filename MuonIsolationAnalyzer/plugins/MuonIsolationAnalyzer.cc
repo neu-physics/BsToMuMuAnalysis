@@ -44,6 +44,7 @@
 #include "DataFormats/VertexReco/interface/Vertex.h"
 #include "DataFormats/VertexReco/interface/VertexFwd.h"
 #include "SimDataFormats/Vertex/interface/SimVertex.h"
+#include "SimDataFormats/Vertex/interface/SimVertexContainer.h"
 
 #include "DataFormats/HepMCCandidate/interface/GenParticle.h"
 #include "DataFormats/HepMCCandidate/interface/GenParticleFwd.h"
@@ -127,10 +128,6 @@ class MuonIsolationAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResour
 
       reco::Vertex vertex;
       //SimVertex genPV;
-      math::XYZPoint genVertexPoint;
-      //Point3D genVertexPoint;
-
-      //const SimVertex *genPV;// = NULL;// = SimVertex();
 
       bool isZmumuSignal_;
       //string lastFourFileID_;
@@ -230,7 +227,7 @@ MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
    dz_muonVertex    = 0.5;
    dxy_pfCandVertex = 0.02;
    dz_pfCandVertex  = 0.1;
-
+   
    //Handle<TrackCollection> tracks;
    //iEvent.getByToken(tracksToken_, tracks);
 
@@ -246,25 +243,25 @@ MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
    iEvent.getByToken(genXYZToken_, genXYZHandle_);
    iEvent.getByToken(genT0Token_, genT0Handle_);
    iEvent.getByToken(genVertexToken_, genVertexHandle_);    
+   
 
    //---get truth PV
    const SimVertex *genPV = NULL;// = SimVertex();
-   if(genVertexHandle_.isValid()){
-     //genPV = genVertexHandle_.product()->at(0);
-     genPV = &(genVertexHandle_.product()->at(0));
-     auto xyz = genXYZHandle_.product();
-     genVertexPoint = math::XYZPoint(xyz->x(), xyz->y(), xyz->z());
-   }
-   else
-     {
-       auto xyz = genXYZHandle_.product();
-       auto t = *genT0Handle_.product();
-       auto v = math::XYZVectorD(xyz->x(), xyz->y(), xyz->z());
-       std::cout << "oh actually sometimes we don't find a gen pv" << std::endl;
-       genPV = SimVertex(v, t);
-       //genPV = *(SimVertex(v, t));
-     }
    
+   if(genVertexHandle_.isValid()){
+     const vector<SimVertex>& genVertices = *genVertexHandle_;   
+     genPV = &(genVertices.at(0));   
+   }
+   else {
+     std::cout << "oh actually sometimes we don't find a gen pv" << std::endl;
+     return;
+     /*auto xyz = genXYZHandle_.product();
+     auto t = *genT0Handle_.product();
+     auto v = math::XYZVectorD(xyz->x(), xyz->y(), xyz->z());
+     //genPV = const_cast<SimVertex&>(v, t);
+     genPV = SimVertex(v, t);
+     */
+   }
 
       
    int vtx_index = -1;
@@ -284,8 +281,8 @@ MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
        // {
        //     if(isTimingSample_)
        //     {
-       //         const double dzdt = pow((vtx.z() - genPV->position().z())/vtx.zError(), 2) +
-       //             pow((vtx.t()-genPV->position().t())/vtx.tError(), 2);                            
+       //         const double dzdt = pow((vtx.z() - genPV.position().z())/vtx.zError(), 2) +
+       //             pow((vtx.t()-genPV.position().t())/vtx.tError(), 2);                            
        //         if( dzdt < min_dzdt )
        //         {
        //             min_dzdt = dzdt;
@@ -302,7 +299,7 @@ MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
    if (vtx_index == -1) // no good PV found
      return;
    vertex = (*vertexHandle_)[vtx_index];
-     
+           
    //vertex = (*genPV);
    //vertex = (genVertexHandle_.product()->at(0));
    h_event_cutflow_->Fill("Good Vertex", 1);
@@ -359,9 +356,6 @@ MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
 
    if (!isZmumuSignal_) // background ttbar
      decayMode = ttbarDecayMode( genHandle_ );
-   //else // signal Z->mumu
-   //  getPromptMuons( genHandle_ );
-
    h_ttbarDecayMode_->Fill( decayMode );
    
    
@@ -504,6 +498,14 @@ float MuonIsolationAnalyzer::getMuonPFCandIso(const reco::Muon& iMuon, edm::Hand
      float dz_sim  = std::abs( pfTrack->vz() - genPV->position().z() ); 
      float dxy_sim = sqrt ( pow(pfTrack->vx() - genPV->position().x(),2) + pow(pfTrack->vy() - genPV->position().y(),2) ); 
 
+     if ( dz_sim > dz_pfCandVertex )
+       continue;
+     h_pfCandidate_cutflow_->Fill("dz < 0.1", 1);
+     
+     if ( dxy_sim > dxy_pfCandVertex )
+       continue;
+     h_pfCandidate_cutflow_->Fill("dxy < 0.02", 1);
+     
      // kinematic cuts on PF candidate
      if ( fabs(pfCandidate.eta())<1.5){ // BTL acceptance
        h_pfCandidate_cutflow_->Fill("In BTL Volume", 1);
@@ -516,57 +518,21 @@ float MuonIsolationAnalyzer::getMuonPFCandIso(const reco::Muon& iMuon, edm::Hand
        h_muon_pfCandIso03_dxy_BTL_->Fill( dxy_sim );
        h_muon_pfCandIso03_dz_BTL_->Fill( dz_sim );
        
-       if ( dz_sim > dz_pfCandVertex )
-	 continue;
-       h_pfCandidate_cutflow_->Fill("dz < 0.1", 1);
-       
-       if ( dxy_sim > dxy_pfCandVertex )
-	 continue;
-       h_pfCandidate_cutflow_->Fill("dxy < 0.02", 1);
-       
-       // sum candidates in cone
-       if ( passDeltaR( isoCone, iMuon.eta(), iMuon.phi(), pfCandidate.eta(), pfCandidate.phi()) ) {
-	 numberOfAssociatedPFCandidates++;
-	 sumPFCandPtInCone += pfCandidate.pt();
-       }
-       /*
-       float Deta = iMuon.eta() - pfCandidate.eta();
-       float Dphi = deltaPhi( iMuon.phi(), pfCandidate.phi());
-       float DR = sqrt(Deta*Deta+Dphi*Dphi);
-       
-       if (DR < isoCone){
-	 numberOfAssociatedPFCandidates++;
-	 sumPFCandPtInCone += pfCandidate.pt();
-       }
-       */
      }
      //else if ( fabs(track->eta())>1.5 && fabs(track->eta())<2.8) { // ETL acceptance
      else if ( fabs(pfCandidate.eta())>1.5 && fabs(pfCandidate.eta())<2.8) { // ETL acceptance
-       //std::cout << "ETL  " << fabs(track->dz(genVertexPoint)) << std::endl;
        if (pfTrack->pt() < 0.4)
-	 continue;
-       if ( fabs(pfTrack->dz(genVertexPoint)) > 0.2 )
-         continue;
-       
-       //sumPFCandPtInCone = -1;
+	 continue;       
      }
      else
        continue;
      
-     /*
      // sum candidates in cone
-     float Deta = iMuon.eta() - pfCandidate.eta();
-     float Dphi = deltaPhi( iMuon.phi(), pfCandidate.phi());
-     float DR = sqrt(Deta*Deta+Dphi*Dphi);
-     
-     //if (DR < isoCone && DR > identityCone){
-     if (DR < isoCone) {
+     if ( passDeltaR( isoCone, iMuon.eta(), iMuon.phi(), pfCandidate.eta(), pfCandidate.phi()) ) {
        numberOfAssociatedPFCandidates++;
-       result += pfCandidate.pt();
-       h_muon_pfCandIso03_dxy_BTL_->Fill()
+       sumPFCandPtInCone += pfCandidate.pt();
      }
-     */
-
+     
    }
    //std::cout << "Isolation = " << result << " with " << numberOfAssociatedPFCandidates << " associated to muon" << std::endl;
    h_muon_numCand->Fill(numberOfAssociatedPFCandidates);
@@ -878,43 +844,15 @@ bool MuonIsolationAnalyzer::isGoodMuon(const reco::Muon& iMuon, edm::Handle<std:
 
   // *** 5A. accept only prompt muons if Z->mumu signal
   if (isZmumuSignal_) {
-    /*
-    for( unsigned int iTruthMuon = 0; iTruthMuon < promptMuonTruthCandidates_.size(); iTruthMuon++){
-      const reco::Candidate * promptTruthMuon = ( promptMuonTruthCandidates_[iTruthMuon]);
-      
-      if ( passDeltaR( coneSize_muonToPromptTruth, iMuon.eta(), iMuon.phi(), promptTruthMuon->eta(), promptTruthMuon->phi()) == true)
-	recoMuonMatchedToPromptTruth = true;
-	}*/
+
     if (!recoMuonMatchedToPromptTruth)
       return false;
     h_muon_cutflow_->Fill("Signal Prompt Muon", 1);
-    //nPromptMuons += 1;
   }
   // *** 5B. reject prompt muons if ttbar background
   else if (!isZmumuSignal_) {
-    /*
-    // ** i. Test if muon is prompt
-    for( unsigned int iTruthMuon = 0; iTruthMuon < promptMuonTruthCandidates_.size(); iTruthMuon++){
-      const reco::Candidate * promptTruthMuon = (promptMuonTruthCandidates_[iTruthMuon]);
 
-      if ( passDeltaR( coneSize_muonToPromptTruth, iMuon.eta(), iMuon.phi(), promptTruthMuon->eta(), promptTruthMuon->phi()) )
-	recoMuonMatchedToPromptTruth = true;
-    }
-
-    // ** ii. Test if muon matches genJet
-    auto genJets = *genJetHandle_.product();
-    for( unsigned int iGenJet = 0; iGenJet < genJetHandle_->size(); ++iGenJet ) {
-      //iEvent.getByToken(genJetToken_, genJetHandle_);
-      auto genJet = genJets.at(iGenJet);
-      if (genJet.pt()<15 || (genJet.hadEnergy()/genJet.energy() < 0.3) ) continue;
-
-      if ( passDeltaR( coneSize_muonToGetJet, iMuon.eta(), iMuon.phi(), genJet.eta(), genJet.phi()) )
-	recoMuonMatchedToGenJet = true;
-    }
-
-    // ** iii. Test if muon matches tau
-    */
-    // ** iv. Muon is "good" non-prompt if !truthMatched && genJetMatched && !tauMatched
+    // ** . Muon is "good" non-prompt if !truthMatched && genJetMatched && !tauMatched
     if ( !recoMuonMatchedToPromptTruth && recoMuonMatchedToGenJet && !recoMuonFromTau) {
       h_muon_cutflow_->Fill("Non-prompt Bkg Muon", 1);
     }
