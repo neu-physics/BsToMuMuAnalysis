@@ -225,7 +225,8 @@ MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
    // Set constants
    dxy_muonVertex   = 0.2;
    dz_muonVertex    = 0.5;
-   dxy_pfCandVertex = 0.02;
+   //dxy_pfCandVertex = 0.02;
+   dxy_pfCandVertex = 9999; // [FIXME] BBT, 8-20-19, remove to test agreement with Martina
    dz_pfCandVertex  = 0.1;
    
    //Handle<TrackCollection> tracks;
@@ -833,10 +834,6 @@ bool MuonIsolationAnalyzer::isGoodMuon(const reco::Muon& iMuon, edm::Handle<std:
   h_muon_cutflow_->Fill("z0 < 0.5 cm", 1);
   // end
 
-  
-  //bool recoMuonMatchedToPromptTruth = false;
-  //bool recoMuonMatchedToGenJet = false;
-  
   // calculate some booleans
   bool recoMuonMatchedToPromptTruth = isPromptMuon(iMuon, genHandle);
   bool recoMuonMatchedToGenJet      = isMatchedToGenJet(iMuon, genJetHandle);

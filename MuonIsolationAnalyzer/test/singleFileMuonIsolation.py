@@ -19,10 +19,14 @@ isZmumu = True if sys.argv[2] == 'isZmumu' else False
 is200PU = True if sys.argv[3] == 'is200PU' else False 
 
 #make output file
+filelist = [x for x in sys.argv[4].split(',') if x != '']
+lastFourFileIDs = '-'.join( [lastFour[len(lastFour)-9:len(lastFour)-5] for lastFour in filelist] ) # get and concatenate last four digits of filenames
+
+os.system('rm tempInputFile.txt')
 os.system('touch tempInputFile.txt')
-os.system('echo {0} > tempInputFile.txt'.format(sys.argv[4]) )
-filename = sys.argv[4]
-lastFourFileID = filename[len(filename)-9:len(filename)-5]
+for line in filelist:
+    os.system('echo {0} >> tempInputFile.txt'.format(line) )
+
 
 #####################################################################################
 #####                     Now start normal CMSSW stuff                          #####
@@ -60,8 +64,8 @@ process.load('BsToMuMuAnalysis.MuonIsolationAnalyzer.MuonIsolationAnalyzer_cfi')
 muonIsoAnalyzer = process.MuonIsolationAnalyzer
 muonIsoAnalyzer.isZmumuSignal = isZmumu
 
-print("name of fileID: {0}".format(lastFourFileID))
-process.TFileService = cms.Service("TFileService", fileName = cms.string("muonIsolation_output_{0}{1}_{2}.root".format(sample, nPU, lastFourFileID)) )
+print("name of fileID: {0}".format(lastFourFileIDs))
+process.TFileService = cms.Service("TFileService", fileName = cms.string("muonIsolation_output_{0}{1}_{2}.root".format(sample, nPU, lastFourFileIDs)) )
 
 process.runseq = cms.Sequence()
 process.runseq += muonIsoAnalyzer
