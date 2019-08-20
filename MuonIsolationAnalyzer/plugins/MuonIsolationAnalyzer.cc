@@ -86,7 +86,7 @@ class MuonIsolationAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResour
       static void fillDescriptions(edm::ConfigurationDescriptions& descriptions);
       float getMuonPFRelIso(const reco::Muon&) const;
       float getMuonPFCandIso(const reco::Muon&, edm::Handle<std::vector<reco::PFCandidate> >& pfCandHandle, const SimVertex *genPV) const;
-      bool  isGoodMuon(const reco::Muon&,  edm::Handle<std::vector<reco::GenParticle> >& genHandle, edm::Handle<std::vector<reco::GenJet> >& genJetHandle) const;
+      bool  isGoodMuon(const reco::Muon&,  edm::Handle<std::vector<reco::GenParticle> >& genHandle, edm::Handle<std::vector<reco::GenJet> >& genJetHandle, const SimVertex *genPV) const;
       int   ttbarDecayMode(edm::Handle<std::vector<reco::GenParticle> >& genHandle);
       void  getPromptTruthMuons(edm::Handle<std::vector<reco::GenParticle> >& genHandle);
       const reco::Candidate * GetObjectJustBeforeDecay( const reco::Candidate * particle );
@@ -141,6 +141,11 @@ class MuonIsolationAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResour
       float pfCandIdentityCut;
       double nPromptMuons;
       double nNonPromptMuons;
+
+      float dxy_muonVertex;
+      float dz_muonVertex;
+      float dxy_pfCandVertex;
+      float dz_pfCandVertex;
 
       //---outputs
       TH1* h_event_cutflow_;    
@@ -220,6 +225,12 @@ MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
    coneSize_muonToGetJet = 0.3;
    coneSize_muonToPromptTruth = 0.2;
 
+   // Set constants
+   dxy_muonVertex   = 0.2;
+   dz_muonVertex    = 0.5;
+   dxy_pfCandVertex = 0.02;
+   dz_pfCandVertex  = 0.1;
+
    //Handle<TrackCollection> tracks;
    //iEvent.getByToken(tracksToken_, tracks);
 
@@ -246,11 +257,11 @@ MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
    }
    else
      {
-       //auto xyz = *genXYZHandle_.product();
-       //auto t = *genT0Handle_.product();
-       //auto v = math::XYZVectorD(xyz->x(), xyz->y(), xyz->z());
+       auto xyz = genXYZHandle_.product();
+       auto t = *genT0Handle_.product();
+       auto v = math::XYZVectorD(xyz->x(), xyz->y(), xyz->z());
        std::cout << "oh actually sometimes we don't find a gen pv" << std::endl;
-       return;
+       genPV = SimVertex(v, t);
        //genPV = *(SimVertex(v, t));
      }
    
@@ -365,7 +376,7 @@ MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
    for(unsigned iMuon = 0; iMuon < muons.size(); ++iMuon)   {
      auto muon = muons.at(iMuon);
      
-     if ( !isGoodMuon( muon, genHandle_, genJetHandle_ )) continue;
+     if ( !isGoodMuon( muon, genHandle_, genJetHandle_, genPV )) continue;
      h_event_nPromptMuons_->Fill( nPromptMuons ) ;
      h_event_nNonPromptMuons_->Fill( nNonPromptMuons ) ;
 
@@ -505,11 +516,11 @@ float MuonIsolationAnalyzer::getMuonPFCandIso(const reco::Muon& iMuon, edm::Hand
        h_muon_pfCandIso03_dxy_BTL_->Fill( dxy_sim );
        h_muon_pfCandIso03_dz_BTL_->Fill( dz_sim );
        
-       if ( dz_sim > 0.1 )
+       if ( dz_sim > dz_pfCandVertex )
 	 continue;
        h_pfCandidate_cutflow_->Fill("dz < 0.1", 1);
        
-       if ( dxy_sim > 0.02 )
+       if ( dxy_sim > dxy_pfCandVertex )
 	 continue;
        h_pfCandidate_cutflow_->Fill("dxy < 0.02", 1);
        
@@ -812,7 +823,7 @@ int MuonIsolationAnalyzer::ttbarDecayMode(edm::Handle<std::vector<reco::GenParti
   return decayMode;
 }
 
-bool MuonIsolationAnalyzer::isGoodMuon(const reco::Muon& iMuon, edm::Handle<std::vector<reco::GenParticle> >& genHandle, edm::Handle<std::vector<reco::GenJet> >& genJetHandle) const
+bool MuonIsolationAnalyzer::isGoodMuon(const reco::Muon& iMuon, edm::Handle<std::vector<reco::GenParticle> >& genHandle, edm::Handle<std::vector<reco::GenJet> >& genJetHandle, const SimVertex *genPV) const
 {
   h_muon_cutflow_->Fill("All Muons", 1);
   // *** 0. pT > 20 GeV ---> may need to change this for Bs->mumu studies, but keep for now to reproduce TDR results
@@ -835,19 +846,23 @@ bool MuonIsolationAnalyzer::isGoodMuon(const reco::Muon& iMuon, edm::Handle<std:
   if (iMuon.track().isNull()) 
     return false;
 
+  reco::TrackRef muonTrack = iMuon.track();
+  float dz_sim  = std::abs( muonTrack->vz() - genPV->position().z() ); 
+  float dxy_sim = sqrt ( pow(muonTrack->vx() - genPV->position().x(),2) + pow(muonTrack->vy() - genPV->position().y(),2) ); 
+
   // some plots
   if (fabs(iMuon.eta())<1.5){
-    h_muon_dxy_BTL_->Fill( fabs(iMuon.track()->dxy(genVertexPoint)) );
-    h_muon_dz_BTL_->Fill( fabs(iMuon.track()->dz(genVertexPoint)) );
+    h_muon_dxy_BTL_->Fill( dxy_sim );
+    h_muon_dz_BTL_->Fill( dz_sim );
   }
 
   // *** 3. d0 cut
-  if ( fabs(iMuon.track()->dxy(genVertexPoint)) > 0.2 )
+  if ( dxy_sim > dxy_muonVertex )
     return false;
   h_muon_cutflow_->Fill("d0 < 0.2 cm", 1);
   
   // *** 4. z0 cut
-  if ( fabs(iMuon.track()->dz(genVertexPoint)) > 0.5 )
+  if ( dz_sim > dz_muonVertex )
     return false;
   h_muon_cutflow_->Fill("z0 < 0.5 cm", 1);
   // end

@@ -3,7 +3,7 @@
 #include "TGraph.h"
 #include "TCanvas.h"
 
-void drawROC(string topDir="")
+void drawSingleROC(string topDir="")
 {
     gStyle->SetOptStat(0);
     gStyle->SetLegendBorderSize(0);
