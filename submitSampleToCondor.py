@@ -90,7 +90,7 @@ with open(args.inputTXTfile, 'r') as txtfile:
         filelist = ','.join( filesForJob )
         jdl_filename = "submitOneFile_{0}_{1}.jdl".format(args.outputDir, lastFourFileIDs)
         isZmumu = 'isZmumu' if 'zmumu' in args.inputTXTfile else 'isTTbar'
-        is200PU = 'is200PU' if 'PU' in args.inputTXTfile else 'is0PU'
+        is200PU = 'is200PU' if '200PU' in args.inputTXTfile else 'is0PU'
         
 
         os.system("touch {0}".format(jdl_filename))
