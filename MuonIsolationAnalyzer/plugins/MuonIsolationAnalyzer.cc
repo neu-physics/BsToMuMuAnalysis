@@ -86,7 +86,7 @@ class MuonIsolationAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResour
 
       static void fillDescriptions(edm::ConfigurationDescriptions& descriptions);
       float getMuonPFRelIso(const reco::Muon&) const;
-      float getMuonPFCandIso(const reco::Muon&, edm::Handle<std::vector<reco::PFCandidate> >& pfCandHandle, const SimVertex *genPV) const;
+      void getMuonPFCandIso(const reco::Muon&, edm::Handle<std::vector<reco::PFCandidate> >& pfCandHandle, const SimVertex *genPV, std::vector &isolations, bool skipDxy=false, double timeResolution=-1) const;
       bool  isGoodMuon(const reco::Muon&,  edm::Handle<std::vector<reco::GenParticle> >& genHandle, edm::Handle<std::vector<reco::GenJet> >& genJetHandle, const SimVertex *genPV) const;
       int   ttbarDecayMode(edm::Handle<std::vector<reco::GenParticle> >& genHandle);
       void  getPromptTruthMuons(edm::Handle<std::vector<reco::GenParticle> >& genHandle);
@@ -150,10 +150,21 @@ class MuonIsolationAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResour
       TH1* h_event_nNonPromptMuons_;    
       TH1* h_muon_pfRelIso03_BTL_;    
       TH1* h_muon_pfRelIso03_ETL_;   
+
+      // isolation plots for ROC curves
       TH1* h_muon_pfCandIso03_BTL_;    
+      TH1* h_muon_pfCandIso03_ETL_;    
+      TH1* h_muon_pfCandIso03_noDxy_BTL_;    
+      TH1* h_muon_pfCandIso03_noDxy_ETL_;    
+
+      // isolation plots for ROC curves, add 3 sigma (sigma=30 ps) timing cut
+      TH1* h_muon_pfCandIso03_dt30_BTL_;    
+      TH1* h_muon_pfCandIso03_dt30_ETL_;    
+      TH1* h_muon_pfCandIso03_dt30_noDxy_BTL_;    
+      TH1* h_muon_pfCandIso03_dt30_noDxy_ETL_;    
+
       TH1* h_muon_pfCandIso03_dxy_BTL_;    
       TH1* h_muon_pfCandIso03_dz_BTL_;    
-      TH1* h_muon_pfCandIso03_ETL_;    
       TH1* h_muon_cutflow_;    
       TH1* h_muon_dxy_BTL_;    
       TH1* h_muon_dz_BTL_;    
@@ -225,8 +236,7 @@ MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
    // Set constants
    dxy_muonVertex   = 0.2;
    dz_muonVertex    = 0.5;
-   //dxy_pfCandVertex = 0.02;
-   dxy_pfCandVertex = 9999; // [FIXME] BBT, 8-20-19, remove to test agreement with Martina
+   dxy_pfCandVertex = 0.02;
    dz_pfCandVertex  = 0.1;
    
    //Handle<TrackCollection> tracks;
@@ -378,7 +388,12 @@ MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
      // ** A. "Analysis-like" isolation borrowed from ttH
      float pfRelIso03 = getMuonPFRelIso( muon );
      // ** B. "TDR-like" isolation using PFCandidates
-     float pfCandIso03 = getMuonPFCandIso( muon, pfCandHandle_, genPV );
+     // FIXME: need to define vector to pass by reference
+     std::vector<float> pfCandIso03_isolations = {0, 0, 0, 0}; // 0th: nominal isolation, 1st: no dxy cut, 2nd: nominal + 3sigma timing cut, 3rd: no dxy + 3sigma timing cut
+     // FIXME: come up with way to skip filling if pfCand sum is 0 --> this may be what causes slightly higher inefficiency
+
+     getMuonPFCandIso( muon, pfCandHandle_, genPV, pfCandIso03_isolations );
+     //float pfCandIso03_noDxy = getMuonPFCandIso( muon, pfCandHandle_, genPV, true );
 
      h_muon_pT->Fill(muon.pt());     
 
@@ -386,12 +401,18 @@ MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
      if ( fabs(muon.eta()) < 1.5){
        h_muon_pfRelIso03_BTL_->Fill( pfRelIso03 );
        //if ( pfCandIso03>=0 )
-       h_muon_pfCandIso03_BTL_->Fill( pfCandIso03 );
+       h_muon_pfCandIso03_BTL_->Fill( pfCandIso03.at(0) );
+       h_muon_pfCandIso03_noDxy_BTL_->Fill( pfCandIso03_noDxy.at(1) );
+       h_muon_pfCandIso03_dt30_BTL_->Fill( pfCandIso03.at(2) );
+       h_muon_pfCandIso03_dt30_noDxy_BTL_->Fill( pfCandIso03_noDxy.at(3) );
      }
      else if ( fabs(muon.eta()) > 1.5 && fabs(muon.eta()) < 2.8){
        h_muon_pfRelIso03_ETL_->Fill( pfRelIso03 );
        //if ( pfCandIso03>=0 )
-       h_muon_pfCandIso03_ETL_->Fill( pfCandIso03 );
+       h_muon_pfCandIso03_ETL_->Fill( pfCandIso03.at(0) );
+       h_muon_pfCandIso03_noDxy_ETL_->Fill( pfCandIso03_noDxy.at(1) );
+       h_muon_pfCandIso03_dt30_ETL_->Fill( pfCandIso03.at(2) );
+       h_muon_pfCandIso03_dt30_noDxy_ETL_->Fill( pfCandIso03_noDxy.at(3) );
      }
      if (hasGoodMuon == false)
        hasGoodMuon = true;
@@ -444,6 +465,14 @@ MuonIsolationAnalyzer::beginJob()
   h_muon_pfRelIso03_ETL_ = fileService->make<TH1F>("h_muon_pfRelIso03_ETL", "h_muon_pfRelIso03_ETL", 250, 0, 2.0);
   h_muon_pfCandIso03_BTL_ = fileService->make<TH1F>("h_muon_pfCandIso03_BTL", "h_muon_pfCandIso03_BTL", 250, 0, 2.0);
   h_muon_pfCandIso03_ETL_ = fileService->make<TH1F>("h_muon_pfCandIso03_ETL", "h_muon_pfCandIso03_ETL", 250, 0, 2.0);
+  h_muon_pfCandIso03_noDxy_BTL_ = fileService->make<TH1F>("h_muon_pfCandIso03_noDxy_BTL", "h_muon_pfCandIso03_noDxy_BTL", 250, 0, 2.0);
+  h_muon_pfCandIso03_noDxy_ETL_ = fileService->make<TH1F>("h_muon_pfCandIso03_noDxy_ETL", "h_muon_pfCandIso03_noDxy_ETL", 250, 0, 2.0);
+
+  h_muon_pfCandIso03_dt30_BTL_ = fileService->make<TH1F>("h_muon_pfCandIso03_dt30_BTL", "h_muon_pfCandIso03_dt30_BTL", 250, 0, 2.0);
+  h_muon_pfCandIso03_dt30_ETL_ = fileService->make<TH1F>("h_muon_pfCandIso03_dt30_ETL", "h_muon_pfCandIso03_dt30_ETL", 250, 0, 2.0);
+  h_muon_pfCandIso03_dt30_noDxy_BTL_ = fileService->make<TH1F>("h_muon_pfCandIso03_dt30_noDxy_BTL", "h_muon_pfCandIso03_dt30_noDxy_BTL", 250, 0, 2.0);
+  h_muon_pfCandIso03_dt30_noDxy_ETL_ = fileService->make<TH1F>("h_muon_pfCandIso03_dt30_noDxy_ETL", "h_muon_pfCandIso03_dt30_noDxy_ETL", 250, 0, 2.0);
+
   h_muon_pfCandIso03_dxy_BTL_ = fileService->make<TH1F>("h_muon_pfCandIso03_dxy_BTL", "h_muon_pfCandIso03_dxy_BTL", 500, 0, 0.5);
   h_muon_pfCandIso03_dz_BTL_  = fileService->make<TH1F>("h_muon_pfCandIso03_dz_BTL", "h_muon_pfCandIso03_dz_BTL", 500, 0, 0.5);
 
@@ -460,8 +489,8 @@ void
 MuonIsolationAnalyzer::endJob()
 {
 }
-// start
-float MuonIsolationAnalyzer::getMuonPFCandIso(const reco::Muon& iMuon, edm::Handle<std::vector<reco::PFCandidate> >& pfCandHandle, const SimVertex *genPV) const
+
+void MuonIsolationAnalyzer::getMuonPFCandIso(const reco::Muon& iMuon, edm::Handle<std::vector<reco::PFCandidate> >& pfCandHandle, std::vector &isolations, const SimVertex *genPV, bool skipDxy, double timeResolution) const
 {
   float sumPFCandPtInCone = 0.0; 
   float isoCone = 0.3;
@@ -503,15 +532,14 @@ float MuonIsolationAnalyzer::getMuonPFCandIso(const reco::Muon& iMuon, edm::Hand
        continue;
      h_pfCandidate_cutflow_->Fill("dz < 0.1", 1);
      
-     if ( dxy_sim > dxy_pfCandVertex )
+     if ( (dxy_sim > dxy_pfCandVertex) && !skipDxy )
        continue;
      h_pfCandidate_cutflow_->Fill("dxy < 0.02", 1);
      
      // kinematic cuts on PF candidate
-     if ( fabs(pfCandidate.eta())<1.5){ // BTL acceptance
+     if ( fabs(pfCandidate.eta())<1.48){ // BTL acceptance
        h_pfCandidate_cutflow_->Fill("In BTL Volume", 1);
      
-       //std::cout << "BTL  " << fabs(track->dz(vertex.position())) << std::endl;
        if (pfTrack->pt() < 0.7)
 	 continue;
        h_pfCandidate_cutflow_->Fill("pT > 0.7 GeV", 1);
@@ -521,7 +549,7 @@ float MuonIsolationAnalyzer::getMuonPFCandIso(const reco::Muon& iMuon, edm::Hand
        
      }
      //else if ( fabs(track->eta())>1.5 && fabs(track->eta())<2.8) { // ETL acceptance
-     else if ( fabs(pfCandidate.eta())>1.5 && fabs(pfCandidate.eta())<2.8) { // ETL acceptance
+     else if ( fabs(pfCandidate.eta())>1.48 && fabs(pfCandidate.eta())<2.8) { // ETL acceptance
        if (pfTrack->pt() < 0.4)
 	 continue;       
      }
@@ -530,11 +558,17 @@ float MuonIsolationAnalyzer::getMuonPFCandIso(const reco::Muon& iMuon, edm::Hand
      
      // sum candidates in cone
      if ( passDeltaR( isoCone, iMuon.eta(), iMuon.phi(), pfCandidate.eta(), pfCandidate.phi()) ) {
-       numberOfAssociatedPFCandidates++;
-       sumPFCandPtInCone += pfCandidate.pt();
-     }
+       if ( timeResolution!=-1) { // timeResolution either passed by user (!=-1) or defaul (==-1, don't use)
+	 
+       }
+       else { // no check on timing
+	 numberOfAssociatedPFCandidates++;
+	 isolations.at(0) += pfCandidate.pt();
+       }
+     }// end of if condition for within isoCone
      
-   }
+   } // PF Candidate loop
+
    //std::cout << "Isolation = " << result << " with " << numberOfAssociatedPFCandidates << " associated to muon" << std::endl;
    h_muon_numCand->Fill(numberOfAssociatedPFCandidates);
    return sumPFCandPtInCone/(iMuon.pt());

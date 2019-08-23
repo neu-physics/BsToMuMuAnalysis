@@ -18,10 +18,10 @@ sample = ''
 nPU = ''
 if isZmumu:
     sample = 'zmumu'
-    nPU = '_PU' if is200PU else ''
+    nPU = '_200PU' if is200PU else '_NoPU'
 else:
     sample = 'ttbar'
-    nPU = '_PU' if is200PU else ''
+    nPU = '_200PU' if is200PU else '_NoPU'
 
 
 inputDatafileList = FileUtils.loadListFromFile ('MuonIsolationAnalyzer/data/filelists/{0}_files_xrd{1}.txt'.format(sample, nPU) ) 
