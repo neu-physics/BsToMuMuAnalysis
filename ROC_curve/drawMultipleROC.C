@@ -3,7 +3,7 @@
 #include "TGraph.h"
 #include "TCanvas.h"
 
-TGraph* returnROC(string topDir)
+TGraph* returnROC(string topDir, string subdet = "BTL")
 {
 
   TString s_sig = ("zmumu_" + topDir+ "/muonIsolation_output_zmumu_" + topDir + ".root").c_str();
@@ -15,11 +15,11 @@ TGraph* returnROC(string topDir)
   //std::cout << "signal has " << f_sig->IsOpen() << " entries" << std::endl;
   //std::cout << "background has " << f_bkg->IsOpen() << " entries" << std::endl;
   
-  TH1F *h_sig = (TH1F*)f_sig->Get("MuonIsolationAnalyzer/h_muon_pfCandIso03_BTL");
-  TH1F *h_bkg = (TH1F*)f_bkg->Get("MuonIsolationAnalyzer/h_muon_pfCandIso03_BTL");
-  TH1F *h_ttbar_ptCand = (TH1F*)f_bkg->Get("MuonIsolationAnalyzer/h_muon_pT");
-  TH1F *h_z_numCand = (TH1F*)f_sig->Get("MuonIsolationAnalyzer/h_muon_cutflow");
-  TH1F *h_t_numCand = (TH1F*)f_bkg->Get("MuonIsolationAnalyzer/h_muon_cutflow");
+  TH1F *h_sig = (TH1F*)f_sig->Get( ("MuonIsolationAnalyzer/h_muon_pfCandIso03_" + subdet).c_str() );
+  TH1F *h_bkg = (TH1F*)f_bkg->Get( ("MuonIsolationAnalyzer/h_muon_pfCandIso03_" + subdet).c_str() );
+  TH1F *h_ttbar_ptCand = (TH1F*)f_bkg->Get("MuonIsolationAnalyzer/h_muon_pT" );
+  TH1F *h_z_numCand = (TH1F*)f_sig->Get("MuonIsolationAnalyzer/h_muon_cutflow" );
+  TH1F *h_t_numCand = (TH1F*)f_bkg->Get("MuonIsolationAnalyzer/h_muon_cutflow" );
   
   int nbins = h_sig->GetNbinsX();
   float sig_integral = h_sig->Integral(1,nbins);
@@ -42,13 +42,48 @@ TGraph* returnROC(string topDir)
   return g;
 }
 
-void drawMultipleROC(string topDir="")
+void drawThreeCurves( string topDir,  string subdet = "BTL")
+{
+
+    TGraph *g_0PU   = returnROC( ("0PU_" + topDir).c_str(), subdet );
+    TGraph *g_200PU = returnROC( ("200PU_" + topDir).c_str(), subdet );
+    TGraph *g_TDR   = returnROC( ("MTDTDR_200PU_" + topDir).c_str(), subdet );
+
+    TCanvas *c1 = new TCanvas("c1","c1",600,600);
+    c1->cd();
+    c1->SetGrid();
+    g_0PU->SetTitle("prompt muon ROC curve(BTL);prompt eff;non-prompt eff");
+    //g->GetXaxis()->SetRangeUser(0.8,1);
+    //g->GetYaxis()->SetRangeUser(0,0.35);
+    g_0PU->SetLineWidth(3);
+    g_0PU->Draw("AL");
+    g_0PU->GetXaxis()->SetRangeUser(.85, 1.01);
+    g_0PU->GetYaxis()->SetRangeUser(0, .1);
+
+    g_200PU->SetLineColor(kRed);
+    g_200PU->SetLineWidth(3);
+    g_200PU->Draw("L same");
+
+    g_TDR->SetLineColor(kBlue);
+    g_TDR->SetLineWidth(3);
+    g_TDR->Draw("L same");
+
+    c1->Print( ("muonIsolationROC_multi_" + topDir + "_" + subdet + ".png").c_str() );
+
+}
+
+void drawMultipleROC(string topDir="", string subdet = "BTL")
 {
     gStyle->SetOptStat(0);
     gStyle->SetLegendBorderSize(0);
 
-    TGraph *g_0PU   = returnROC( ("0PU_" + topDir).c_str() );
-    TGraph *g_200PU = returnROC( ("200PU_" + topDir).c_str() );
+    drawThreeCurves(topDir, "BTL");
+    drawThreeCurves(topDir, "ETL");
+
+    /*
+    TGraph *g_0PU   = returnROC( ("0PU_" + topDir).c_str(), subdet );
+    TGraph *g_200PU = returnROC( ("200PU_" + topDir).c_str(), subdet );
+    TGraph *g_TDR   = returnROC( ("MTDTDR_200PU_" + topDir).c_str(), subdet );
 
     
     TCanvas *c1 = new TCanvas("c1","c1",600,600);
@@ -66,6 +101,10 @@ void drawMultipleROC(string topDir="")
     g_200PU->SetLineWidth(3);
     g_200PU->Draw("L same");
 
-    c1->Print( ("muonIsolationROC_multi_" + topDir + ".png").c_str() );
+    g_TDR->SetLineColor(kBlue);
+    g_TDR->SetLineWidth(3);
+    g_TDR->Draw("L same");
 
+    c1->Print( ("muonIsolationROC_multi_" + topDir + ".png").c_str() );
+    */
 }

@@ -5,3 +5,4 @@ test_*
 *-19*
 docker*
 *.root
+__init__.py
