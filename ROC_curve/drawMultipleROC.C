@@ -6,7 +6,6 @@
 
 TGraph* returnROC(string topDir, string subdet, string pfCandIso)
 {
-
   TString s_sig = ("zmumu_" + topDir+ "/muonIsolation_output_zmumu_" + topDir + ".root").c_str();
   TString s_bkg = ("ttbar_" + topDir+ "/muonIsolation_output_ttbar_" + topDir + ".root").c_str();
   
@@ -76,21 +75,21 @@ void drawThreeCurves( string topDir,  string subdet = "BTL", string pfCandIso = 
   
 }
 
-void drawThreeCurveWithTiming( string topDir,  string subdet = "BTL")
+void drawThreeCurveWithTiming( string topDir,  string subdet = "BTL", string useDxy = "")
 {
   
-  TGraph *g_0PU_nom    = returnROC( ("MTDTDR_0PU_" + topDir).c_str(), subdet, "pfCandIso03" );
-  TGraph *g_200PU_nom  = returnROC( ("MTDTDR_200PU_" + topDir).c_str(), subdet, "pfCandIso03" );
-  TGraph *g_200PU_dt30 = returnROC( ("MTDTDR_200PU_" + topDir).c_str(), subdet, "pfCandIso03_dt30" );
+  TGraph *g_0PU_nom    = returnROC( ("MTDTDR_0PU_" + topDir).c_str(), subdet, ("pfCandIso03" + useDxy).c_str() );
+  TGraph *g_200PU_nom  = returnROC( ("MTDTDR_200PU_" + topDir).c_str(), subdet, ("pfCandIso03" + useDxy).c_str() );
+  TGraph *g_200PU_dt30 = returnROC( ("MTDTDR_200PU_" + topDir).c_str(), subdet, ("pfCandIso03_dt30" + useDxy).c_str() );
   //TGraph *g_TDR   = returnROC( ("MTDTDR_200PU_" + topDir).c_str(), subdet );
   
   TCanvas *c1 = new TCanvas("c1","c1",600,600);
   c1->cd();
   c1->SetGrid();
-  g_0PU->SetTitle( ("prompt muon ROC curve (" + subdet + ");prompt eff;non-prompt eff").c_str() );
+  g_0PU_nom->SetTitle( ("prompt muon ROC curve (" + subdet + ");prompt eff;non-prompt eff").c_str() );
 
   g_0PU_nom->SetLineWidth(3);
-  g_0PU_nom->SetLineStyle(10);
+  g_0PU_nom->SetLineStyle(9);
   g_0PU_nom->Draw("AL");
   g_0PU_nom->GetXaxis()->SetRangeUser(.85, 1.01);
   g_0PU_nom->GetYaxis()->SetRangeUser(0, .1);
@@ -99,17 +98,18 @@ void drawThreeCurveWithTiming( string topDir,  string subdet = "BTL")
   g_200PU_nom->SetLineWidth(3);
   g_200PU_nom->Draw("L same");
 
-  g_200PU_dt30->SetLineColor(kBlue);
+  g_200PU_dt30->SetLineColor(kRed);
   g_200PU_dt30->SetLineWidth(3);
   g_200PU_dt30->Draw("L same");
   
-  TLegend *leg = new TLegend(0.2, 0.8, .35, .9);
+  TLegend *leg = new TLegend(0.15, 0.65, .4, .85);
   leg->AddEntry(g_0PU_nom, "No MTD, No PU", "l");
   leg->AddEntry(g_200PU_nom, "No MTD, 200PU", "l");
   leg->AddEntry(g_200PU_dt30, "MTD, dz < 1 mm, dt < 3#sigma (#sigma = 30ps)", "l");
+  leg->SetTextSize(0.025);
   leg->Draw("same");
   
-  c1->Print( ("muonIsolationROC_multi_" + topDir + "_" + pfCandIso + "_" + subdet + ".png").c_str() );
+  c1->Print( ("muonIsolationROC_TDR" + useDxy + "_" + topDir + "_" + subdet + ".png").c_str() );
   
 }
 
@@ -127,6 +127,11 @@ void drawMultipleROC(string topDir="", string subdet = "BTL")
     drawThreeCurves(topDir, "ETL", "pfCandIso03_dt30");
     drawThreeCurves(topDir, "BTL", "pfCandIso03_dt30_noDxy");
     drawThreeCurves(topDir, "ETL", "pfCandIso03_dt30_noDxy");
+
+    drawThreeCurveWithTiming( topDir,  "BTL");
+    drawThreeCurveWithTiming( topDir,  "ETL");
+    drawThreeCurveWithTiming( topDir,  "BTL", "_noDxy");
+    drawThreeCurveWithTiming( topDir,  "ETL", "_noDxy");
 
     /*
     TGraph *g_0PU   = returnROC( ("0PU_" + topDir).c_str(), subdet );
