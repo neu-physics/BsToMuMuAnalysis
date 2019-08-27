@@ -398,7 +398,7 @@ MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
      // ** B. "TDR-like" isolation using PFCandidates
      std::vector<float> pfCandIso03 = {0, 0, 0, 0}; // 0th: nominal isolation, 1st: no dxy cut, 2nd: nominal + 3sigma timing cut, 3rd: no dxy + 3sigma timing cut
      int nPFCandidatesInCone = getMuonPFCandIso( muon, pfCandHandle_, genPV, pfCandIso03, 0.030 );
-     if (nPFCandidatesInCone == 0) continue;      // FIXME: come up with way to skip filling if pfCand sum is 0 --> this may be what causes slightly higher inefficiency
+     //if (nPFCandidatesInCone == 0) continue;      // FIXME: come up with way to skip filling if pfCand sum is 0 --> this may be what causes slightly higher inefficiency
 
 
      // Fill information about muon PF relIso (R=0.3)
@@ -545,8 +545,8 @@ int MuonIsolationAnalyzer::getMuonPFCandIso(const reco::Muon& iMuon, edm::Handle
        thisCandPassesDxy = false;
      
      // kinematic cuts on PF candidate
-     //if ( fabs(pfCandidate.eta())<1.5){ // BTL acceptance
-     if ( fabs(pfCandidate.eta())<1.48){ // BTL acceptance
+     if ( fabs(pfCandidate.eta())<1.5){ // BTL acceptance
+     //if ( fabs(pfCandidate.eta())<1.48){ // BTL acceptance
        h_pfCandidate_cutflow_->Fill("In BTL Volume", 1);
      
        if (pfTrack->pt() < 0.7)
@@ -558,8 +558,8 @@ int MuonIsolationAnalyzer::getMuonPFCandIso(const reco::Muon& iMuon, edm::Handle
        
      }
      //else if ( fabs(track->eta())>1.5 && fabs(track->eta())<2.8) { // ETL acceptance
-     //else if ( fabs(pfCandidate.eta())>1.5 && fabs(pfCandidate.eta())<2.8) { // ETL acceptance
-     else if ( fabs(pfCandidate.eta())>1.48 && fabs(pfCandidate.eta())<2.8) { // ETL acceptance
+     else if ( fabs(pfCandidate.eta())>1.5 && fabs(pfCandidate.eta())<2.8) { // ETL acceptance
+     //else if ( fabs(pfCandidate.eta())>1.48 && fabs(pfCandidate.eta())<2.8) { // ETL acceptance
        if (pfTrack->pt() < 0.4)
 	 continue;       
      }

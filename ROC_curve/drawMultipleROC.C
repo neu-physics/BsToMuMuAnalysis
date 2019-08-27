@@ -117,7 +117,7 @@ void drawMultipleROC(string topDir="", string subdet = "BTL")
 {
     gStyle->SetOptStat(0);
     gStyle->SetLegendBorderSize(0);
-
+    
     drawThreeCurves(topDir, "BTL", "pfCandIso03");
     drawThreeCurves(topDir, "ETL", "pfCandIso03");
     drawThreeCurves(topDir, "BTL", "pfCandIso03_noDxy");
@@ -127,7 +127,7 @@ void drawMultipleROC(string topDir="", string subdet = "BTL")
     drawThreeCurves(topDir, "ETL", "pfCandIso03_dt30");
     drawThreeCurves(topDir, "BTL", "pfCandIso03_dt30_noDxy");
     drawThreeCurves(topDir, "ETL", "pfCandIso03_dt30_noDxy");
-
+    
     drawThreeCurveWithTiming( topDir,  "BTL");
     drawThreeCurveWithTiming( topDir,  "ETL");
     drawThreeCurveWithTiming( topDir,  "BTL", "_noDxy");
