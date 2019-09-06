@@ -26,5 +26,10 @@ MuonIsolationAnalyzer = cms.EDAnalyzer('MuonIsolationAnalyzer',
                                        #dumpRecHits = cms.bool(False)
                                        muonsTag = cms.untracked.InputTag("muons"),
                                        vertexTag = cms.untracked.InputTag("offlinePrimaryVertices"),
-                                       pfCandTag = cms.untracked.InputTag("particleFlow")
-                                   )
+                                       #vertex4DTag = cms.untracked.InputTag("offlinePrimaryVertices4D"),
+                                       pfCandTag = cms.untracked.InputTag("particleFlow"),
+                                       TrackFastSimTimeValueMapTag = cms.InputTag("trackTimeValueMapProducer", "generalTracksConfigurableFlatResolutionModel", "RECO"),
+                                       TrackFastSimTimeErrValueMapTag = cms.InputTag("trackTimeValueMapProducer", "generalTracksConfigurableFlatResolutionModelResolution", "RECO"),
+                                       TrackTimeValueMapTag = cms.InputTag("tofPID", "t0", "PAT"),
+                                       TrackTimeErrValueMapTag = cms.InputTag("tofPID", "sigmat0", "PAT")
+                                      )
