@@ -111,8 +111,10 @@ class MuonIsolationAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResour
       edm::Handle< std::vector<reco::Track> > tracksHandle_;
       edm::EDGetTokenT< std::vector<reco::Muon> > muonsToken_;
       edm::Handle< std::vector<reco::Muon> > muonsHandle_;
-      edm::EDGetTokenT< std::vector<reco::Vertex> > vertexToken_;
-      edm::Handle< std::vector<reco::Vertex> > vertexHandle_;
+      edm::EDGetTokenT< std::vector<reco::Vertex> > vertex3DToken_;
+      edm::Handle< std::vector<reco::Vertex> > vertex3DHandle_;
+      edm::EDGetTokenT< std::vector<reco::Vertex> > vertex4DToken_;
+      edm::Handle< std::vector<reco::Vertex> > vertex4DHandle_;
       edm::EDGetTokenT< std::vector<reco::GenParticle> > genToken_;
       edm::Handle< std::vector<reco::GenParticle> > genHandle_;
       edm::EDGetTokenT< std::vector<reco::GenJet> > genJetToken_;
@@ -135,7 +137,8 @@ class MuonIsolationAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResour
       edm::EDGetTokenT<ValueMap<float> > trackFastSimTimeErrToken_;
       edm::Handle<ValueMap<float> > trackFastSimTimeErrValueMap;
 
-      reco::Vertex vertex;
+      reco::Vertex vertex3D;
+      reco::Vertex vertex4D;
       //SimVertex genPV;
 
       bool isZmumuSignal_;
@@ -205,7 +208,8 @@ MuonIsolationAnalyzer::MuonIsolationAnalyzer(const edm::ParameterSet& iConfig):
   //muonsToken_(consumes<MuonCollection>(iConfig.getUntrackedParameter<edm::InputTag>("muonsTag")))
   tracksToken_(consumes<std::vector<reco::Track> >(iConfig.getUntrackedParameter<edm::InputTag>("tracksTag"))),
   muonsToken_(consumes<std::vector<reco::Muon> >(iConfig.getUntrackedParameter<edm::InputTag>("muonsTag"))),
-  vertexToken_(consumes<std::vector<reco::Vertex> >(iConfig.getUntrackedParameter<edm::InputTag>("vertexTag"))),
+  vertex3DToken_(consumes<std::vector<reco::Vertex> >(iConfig.getUntrackedParameter<edm::InputTag>("vertex3DTag"))),
+  vertex4DToken_(consumes<std::vector<reco::Vertex> >(iConfig.getUntrackedParameter<edm::InputTag>("vertex4DTag"))),
   genToken_(consumes<std::vector<reco::GenParticle> >(iConfig.getUntrackedParameter<edm::InputTag>("genTag"))),
   genJetToken_(consumes<std::vector<reco::GenJet> >(iConfig.getUntrackedParameter<edm::InputTag>("genJetTag"))),
   pfCandToken_(consumes<std::vector<reco::PFCandidate> >(iConfig.getUntrackedParameter<edm::InputTag>("pfCandTag"))),
@@ -253,10 +257,11 @@ MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
    dxy_muonVertex   = 0.2;
    dz_muonVertex    = 0.5;
    dxy_pfCandVertex = 0.02;
-   dz_pfCandVertex  = 0.1;
+   dz_pfCandVertex  = 0.2; //for BTL
+   //dz_pfCandVertex  = 0.1;
 
-   btlEfficiency = 0.90;
-   etlEfficiency = 0.85;
+   btlEfficiency = 0.85;
+   etlEfficiency = 0.90;
    
    //Handle<TrackCollection> tracks;
    //iEvent.getByToken(tracksToken_, tracks);
@@ -265,8 +270,11 @@ MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
    h_event_cutflow_->Fill("All Events", 1);
 
    // *** 1. Load vertices
-   iEvent.getByToken(vertexToken_, vertexHandle_);
-   auto vertices = *vertexHandle_.product();
+   iEvent.getByToken(vertex3DToken_, vertex3DHandle_);
+   auto vertices3D = *vertex3DHandle_.product();
+
+   iEvent.getByToken(vertex4DToken_, vertex4DHandle_);
+   auto vertices4D = *vertex4DHandle_.product();
 
    iEvent.getByToken(genJetToken_, genJetHandle_);
 
@@ -299,19 +307,39 @@ MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
    }
 
       
-   int vtx_index = -1;
-   
+   int vtx_index_3D = -1;
+   int vtx_index_4D = -1;
+   /* 
    //---find the vertex this muon is best associated to..
    double min_dz = std::numeric_limits<double>::max();
    //double min_dzdt = std::numeric_limits<double>::max();
-   for( unsigned i = 0; i < vertexHandle_->size(); ++i ) {
-       const auto& vtx = (*vertexHandle_)[i];
+   for( unsigned i = 0; i < vertex3DHandle_->size(); ++i ) {
+       const auto& vtx = (*vertex3DHandle_)[i];
        const float dz = std::abs(vtx.z() - genPV->position().z());
        if( dz < min_dz )
-	 {
-	   min_dz = dz;
-	   vtx_index = i;
-	 }
+	     {
+	       min_dz = dz;
+	       vtx_index_3D = i;
+	     }
+   }
+
+   min_dz = std::numeric_limits<double>::max();
+   //float mindist = std::numeric_limits<float>::max();
+   for( unsigned i = 0; i < vertex4DHandle_->size(); ++i ) {
+       const auto& vtx = (*vertex4DHandle_)[i];
+       float dz = std::abs(vtx.z() - genPV->position().z());
+       //const float dz = std::abs(vtx.z() - genPV->position().z())/vtx.zError();
+       //if ( vtx.tError() <=0 ) continue;
+       //float dt = std::abs(vtx.t() - genPV->position().t()*1000000000.) / vtx.tError();
+       //float dist = sqrt(dz*dz+dt*dt);
+       //if( dist < mindist )
+	     if( dz < min_dz )
+       {
+	       //mindist = dist;
+	       min_dz = dz;
+         vtx_index_4D = i;
+	     }
+   }*/
        // if( dz < 0.1 )
        // {
        //     if(isTimingSample_)
@@ -330,10 +358,14 @@ MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
        //             vtx_index = i;
        //     }
        // }
-   }
-   if (vtx_index == -1) // no good PV found
-     return;
-   vertex = (*vertexHandle_)[vtx_index];
+   
+   
+   if (vtx_index_3D == -1) // no good PV found
+     vtx_index_3D = 0;
+   if (vtx_index_4D == -1)
+     vtx_index_4D = 0;
+   vertex3D = (*vertex3DHandle_)[vtx_index_3D];
+   vertex4D = (*vertex4DHandle_)[vtx_index_4D];
            
    //vertex = (*genPV);
    //vertex = (genVertexHandle_.product()->at(0));
@@ -414,7 +446,7 @@ MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
      float pfRelIso03 = getMuonPFRelIso( muon );
      // ** B. "TDR-like" isolation using PFCandidates
      std::vector<float> pfCandIso03 = {0, 0, 0, 0}; // 0th: nominal isolation, 1st: no dxy cut, 2nd: nominal + 3sigma timing cut, 3rd: no dxy + 3sigma timing cut
-     int nPFCandidatesInCone = getMuonPFCandIso( muon, pfCandHandle_, genPV, pfCandIso03, trackFastSimTimeValueMap, trackFastSimTimeErrValueMap, 0.030 );
+     int nPFCandidatesInCone = getMuonPFCandIso( muon, pfCandHandle_, genPV, pfCandIso03, trackFastSimTimeValueMap, trackFastSimTimeErrValueMap, 0.040 );
      //if (nPFCandidatesInCone == 0) continue;      // FIXME: come up with way to skip filling if pfCand sum is 0 --> this may be what causes slightly higher inefficiency
 
 
@@ -486,13 +518,13 @@ MuonIsolationAnalyzer::beginJob()
   h_muon_pfRelIso03_ETL_ = fileService->make<TH1F>("h_muon_pfRelIso03_ETL", "h_muon_pfRelIso03_ETL", 250, 0, 2.0);
   h_muon_pfCandIso03_BTL_ = fileService->make<TH1F>("h_muon_pfCandIso03_BTL", "h_muon_pfCandIso03_BTL", 250, 0, 2.0);
   h_muon_pfCandIso03_ETL_ = fileService->make<TH1F>("h_muon_pfCandIso03_ETL", "h_muon_pfCandIso03_ETL", 250, 0, 2.0);
-  h_muon_pfCandIso03_noDxy_BTL_ = fileService->make<TH1F>("h_muon_pfCandIso03_noDxy_BTL", "h_muon_pfCandIso03_noDxy_BTL", 250, 0, 2.0);
-  h_muon_pfCandIso03_noDxy_ETL_ = fileService->make<TH1F>("h_muon_pfCandIso03_noDxy_ETL", "h_muon_pfCandIso03_noDxy_ETL", 250, 0, 2.0);
+  h_muon_pfCandIso03_noDxy_BTL_ = fileService->make<TH1F>("h_muon_pfCandIso03_noDxy_BTL", "h_muon_pfCandIso03_noDxy_BTL", 5000, 0, 5.0);
+  h_muon_pfCandIso03_noDxy_ETL_ = fileService->make<TH1F>("h_muon_pfCandIso03_noDxy_ETL", "h_muon_pfCandIso03_noDxy_ETL", 5000, 0, 5.0);
 
   h_muon_pfCandIso03_dt30_BTL_ = fileService->make<TH1F>("h_muon_pfCandIso03_dt30_BTL", "h_muon_pfCandIso03_dt30_BTL", 250, 0, 2.0);
   h_muon_pfCandIso03_dt30_ETL_ = fileService->make<TH1F>("h_muon_pfCandIso03_dt30_ETL", "h_muon_pfCandIso03_dt30_ETL", 250, 0, 2.0);
-  h_muon_pfCandIso03_dt30_noDxy_BTL_ = fileService->make<TH1F>("h_muon_pfCandIso03_dt30_noDxy_BTL", "h_muon_pfCandIso03_dt30_noDxy_BTL", 250, 0, 2.0);
-  h_muon_pfCandIso03_dt30_noDxy_ETL_ = fileService->make<TH1F>("h_muon_pfCandIso03_dt30_noDxy_ETL", "h_muon_pfCandIso03_dt30_noDxy_ETL", 250, 0, 2.0);
+  h_muon_pfCandIso03_dt30_noDxy_BTL_ = fileService->make<TH1F>("h_muon_pfCandIso03_dt30_noDxy_BTL", "h_muon_pfCandIso03_dt30_noDxy_BTL", 5000, 0, 5.0);
+  h_muon_pfCandIso03_dt30_noDxy_ETL_ = fileService->make<TH1F>("h_muon_pfCandIso03_dt30_noDxy_ETL", "h_muon_pfCandIso03_dt30_noDxy_ETL", 5000, 0, 5.0);
 
   h_muon_pfCandIso03_dxy_BTL_ = fileService->make<TH1F>("h_muon_pfCandIso03_dxy_BTL", "h_muon_pfCandIso03_dxy_BTL", 500, 0, 0.5);
   h_muon_pfCandIso03_dz_BTL_  = fileService->make<TH1F>("h_muon_pfCandIso03_dz_BTL", "h_muon_pfCandIso03_dz_BTL", 500, 0, 0.5);
@@ -537,7 +569,7 @@ int MuonIsolationAnalyzer::getMuonPFCandIso(const reco::Muon& iMuon, edm::Handle
      // keep PFCands with good tracks
      if(pfTrack.isNull())
        continue;
-     if(!pfTrack->quality(reco::TrackBase::highPurity))
+     if(!(pfTrack->quality(reco::TrackBase::highPurity)))
        continue;
      h_pfCandidate_cutflow_->Fill("HighPurity Track", 1);
 
@@ -549,7 +581,11 @@ int MuonIsolationAnalyzer::getMuonPFCandIso(const reco::Muon& iMuon, edm::Handle
      // calculate dxy/dz 
      float dz_sim  = std::abs( pfTrack->vz() - genPV->position().z() ); 
      float dxy_sim = sqrt ( pow(pfTrack->vx() - genPV->position().x(),2) + pow(pfTrack->vy() - genPV->position().y(),2) ); 
-
+     float dz4D = std::abs( pfTrack->dz(vertex4D.position()) );
+     float dz3D = std::abs( pfTrack->dz(vertex3D.position()) );
+     float dzmu = std::abs( pfTrack->dz(vertex4D.position()) - iMuon.track()->dz(vertex4D.position()) );
+    
+     
      if ( dz_sim > dz_pfCandVertex )
        continue;
      h_pfCandidate_cutflow_->Fill("dz < 0.1", 1);
@@ -588,11 +624,14 @@ int MuonIsolationAnalyzer::getMuonPFCandIso(const reco::Muon& iMuon, edm::Handle
 	 numberOfAssociatedPFCandidates++;
 
        if ( timeResolution!=-1) { // timeResolution either passed by user (!=-1) or defaul (==-1, don't use)
-	 
    double pfcandtimeFastSim = (*trackFastSimTimeValueMap)[pfTrack];
 	 double pfcandtimeErrFastSim = (*trackFastSimTimeErrValueMap)[pfTrack];
+   //double pfcandtimeFastSim = (*trackTimeValueMap)[pfTrack];
+	 //double pfcandtimeErrFastSim = (*trackTimeErrValueMap)[pfTrack];
    TRandom *gRandom = new TRandom();
-	 double targetTimeResol = timeResolution;
+   TRandom *gRandom2 = new TRandom();
+   TRandom *gRandom3 = new TRandom();
+   double targetTimeResol = timeResolution;
 	 //double defaultTimeResol  = 0.;
    double defaultTimeResolFastSim  = pfcandtimeErrFastSim;
 	 //if ( pfCandidate.isTimeValid() ) 
@@ -606,10 +645,6 @@ int MuonIsolationAnalyzer::getMuonPFCandIso(const reco::Muon& iMuon, edm::Handle
    if ( targetTimeResol > defaultTimeResolFastSim)
      extra_resol_FastSim = sqrt(targetTimeResol*targetTimeResol - defaultTimeResolFastSim*defaultTimeResolFastSim);
 
-   if ( pfcandtimeErrFastSim !=-1 ){
-     double rndFastSim = gRandom->Gaus(0., extra_resol_FastSim);
-     double timeFastSim = pfcandtimeFastSim + rndFastSim;
-   }
 
 	 double dtsim = 0.;
 	 double pfCandidateTime = -999.;
@@ -618,23 +653,28 @@ int MuonIsolationAnalyzer::getMuonPFCandIso(const reco::Muon& iMuon, edm::Handle
 	   // -- emulate BTL and ETL efficiency
 	   bool keepTrack = true;
 
-	   /*// introduce inefficiency loss to mirror more realistic detector behaviour, [BBT 08-23-19: COMMENT OUT FOR NOW]
-	   double rndEff = gRandom2->Uniform(0.,1.); 
+	   // introduce inefficiency loss to mirror more realistic detector behaviour, [BBT 08-23-19: COMMENT OUT FOR NOW]
+	   double rndEff = gRandom2->Uniform(0.,1.);
+     //std::cout << "eff: " << rndEff << std::endl;
+     //std::cout << "KeepTrack: " << (int) keepTrack << std::endl;
 	   if ( std::abs(pfCandidate.eta()) < 1.5 && rndEff > btlEfficiency ) keepTrack = false; 
 	   if ( std::abs(pfCandidate.eta()) > 1.5 && rndEff > etlEfficiency ) keepTrack = false; 
-	   */
 
      if ( pfcandtimeErrFastSim !=-1 ){
        double rndFastSim = gRandom->Gaus(0., extra_resol_FastSim);
        pfCandidateTime = pfcandtimeFastSim + rndFastSim;
+       //std::cout << "rndFastSim = " << rndFastSim;
      }
 	   if ((keepTrack) && (pfCandidateTime!=-999) ) {
 	     // -- extra smearing to emulate different time resolution
 	     
        //double rnd   = gRandom->Gaus(0., extra_resol);
 	     //pfCandidateTime = pfCandidate.time() + rnd;
-	     dtsim = std::abs(pfCandidateTime - genPV->position().t()*1000000000.);
-	     //cout << "target time resol = "<< targetTimeResol << "  extra_resol = "<< extra_resol << "  rnd = " << rnd << "  pfCandidate time = " << pfCandidateTime << "  dtsim = " << dtsim << endl;
+	     // extra extra smearing 
+       double extra_smearing = sqrt(std::abs(targetTimeResol*targetTimeResol - 0.035*0.035));
+       pfCandidateTime = pfCandidateTime + gRandom3->Gaus(0,extra_smearing);
+       dtsim = std::abs(pfCandidateTime - genPV->position().t()*1000000000.);
+	     //cout << "  target time resol = "<< targetTimeResol << "  extra_resol = "<< extra_resol_FastSim << "  extra rnd = " << extra_smearing << "  pfCandidate time = " << pfCandidateTime << "  dtsim = " << dtsim << endl;
 	   }
 	   else
 	     dtsim = 0.;
@@ -933,47 +973,64 @@ int MuonIsolationAnalyzer::ttbarDecayMode(edm::Handle<std::vector<reco::GenParti
 bool MuonIsolationAnalyzer::isGoodMuon(const reco::Muon& iMuon, edm::Handle<std::vector<reco::GenParticle> >& genHandle, edm::Handle<std::vector<reco::GenJet> >& genJetHandle, const SimVertex *genPV) const
 {
   h_muon_cutflow_->Fill("All Muons", 1);
+  
+  // *** just check to make sure muon track available
+  if (iMuon.pt() < 5.)
+    return false;
+  if (iMuon.track().isNull()) 
+    return false;
+  h_muon_cutflow_->Fill("track", 1);
+  
   // *** 0. pT > 20 GeV ---> may need to change this for Bs->mumu studies, but keep for now to reproduce TDR results
   if (iMuon.pt() < 20.)
     return false;
   h_muon_cutflow_->Fill("pT > 20", 1);
 
-  // *** 1. |eta| < 2.4
-  if ( fabs(iMuon.eta()) > 2.4 )
+  if (iMuon.pt() > 9999.)
     return false;
-  h_muon_cutflow_->Fill("|eta| < 2.4", 1);
-  
+  h_muon_cutflow_->Fill("pT < 9999", 1);
+
   // *** 2. Loose ID
   //if ( iMuon.passed('CutBasedIdLoose'))//userFloat("CutBasedIdLoose") ) // CutBasedIdLoose, MvaLoose, others?
   if ( !(muon::isLooseMuon(iMuon)) )
     return false;
   h_muon_cutflow_->Fill("Loose ID", 1);
+  
+  // *** 1. |eta| < 2.4
+  //if ( fabs(iMuon.eta()) > 2.4 )
+  //  return false;
+  //h_muon_cutflow_->Fill("|eta| < 2.4", 1);
+  
 
-  // *** just check to make sure muon track available
-  if (iMuon.track().isNull()) 
-    return false;
 
   reco::TrackRef muonTrack = iMuon.track();
   float dz_sim  = std::abs( muonTrack->vz() - genPV->position().z() ); 
   float dxy_sim = sqrt ( pow(muonTrack->vx() - genPV->position().x(),2) + pow(muonTrack->vy() - genPV->position().y(),2) ); 
 
+  float dz_4D = std::abs( muonTrack->dz(vertex4D.position()));
+  float dxy_4D = std::abs( muonTrack->dxy(vertex4D.position()));
   // some plots
   if (fabs(iMuon.eta())<1.5){
     h_muon_dxy_BTL_->Fill( dxy_sim );
     h_muon_dz_BTL_->Fill( dz_sim );
   }
 
+  // *** 4. z0 cut
+  if ( dz_4D > dz_muonVertex )
+    return false;
+  h_muon_cutflow_->Fill("z0 < 0.5 cm", 1);
+  
   // *** 3. d0 cut
-  if ( dxy_sim > dxy_muonVertex )
+  if ( dxy_4D > dxy_muonVertex )
     return false;
   h_muon_cutflow_->Fill("d0 < 0.2 cm", 1);
   
-  // *** 4. z0 cut
-  if ( dz_sim > dz_muonVertex )
-    return false;
-  h_muon_cutflow_->Fill("z0 < 0.5 cm", 1);
   // end
 
+  if (vertex4D.isFake() || vertex3D.isFake() )
+    return false;
+  h_muon_cutflow_->Fill("nofake", 1);
+  
   // calculate some booleans
   bool recoMuonMatchedToPromptTruth = isPromptMuon(iMuon, genHandle);
   bool recoMuonMatchedToGenJet      = isMatchedToGenJet(iMuon, genJetHandle);
@@ -997,6 +1054,11 @@ bool MuonIsolationAnalyzer::isGoodMuon(const reco::Muon& iMuon, edm::Handle<std:
       return false;
   }
 
+  if (fabs(vertex4D.z()-genPV->position().z()) > 0.01 ) return false;
+  h_muon_cutflow_->Fill("4D_gen", 1);
+  if (fabs(vertex3D.z()-genPV->position().z()) > 0.01 ) return false;
+  h_muon_cutflow_->Fill("3D_gen", 1);
+
   return true;
 
 }
@@ -1009,7 +1071,7 @@ bool MuonIsolationAnalyzer::passDeltaR( float coneSize, float eta1, float phi1, 
   float d_phi = phi1 - phi2;
   float dR = sqrt( d_eta*d_eta + d_phi*d_phi);            
 
-  if (dR < coneSize)
+  if (dR > 0.0 && dR < coneSize)
     return true;
   else
     return false;
