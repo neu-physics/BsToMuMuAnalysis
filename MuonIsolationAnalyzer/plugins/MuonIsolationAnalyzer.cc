@@ -53,6 +53,7 @@
 #include "DataFormats/Candidate/interface/Candidate.h"
 #include "DataFormats/Math/interface/deltaPhi.h"
 #include "DataFormats/Math/interface/Point3D.h"
+#include "DataFormats/Math/interface/deltaR.h"
 
 #include "DataFormats/ParticleFlowCandidate/interface/PFCandidate.h"
 #include "DataFormats/RecoCandidate/interface/RecoCandidate.h"
@@ -578,21 +579,29 @@ int MuonIsolationAnalyzer::getMuonPFCandIso(const reco::Muon& iMuon, edm::Handle
        continue;
      h_pfCandidate_cutflow_->Fill("no muonRef match", 1);
 
+     if ( std::abs(pfCandidate.eta()) < 1.48 && pfCandidate.pt() < 0.7 ) continue;
+     if ( std::abs(pfCandidate.eta()) > 1.48 && pfCandidate.pt() < 0.4 ) continue;
      // calculate dxy/dz 
      float dz_sim  = std::abs( pfTrack->vz() - genPV->position().z() ); 
      float dxy_sim = sqrt ( pow(pfTrack->vx() - genPV->position().x(),2) + pow(pfTrack->vy() - genPV->position().y(),2) ); 
      float dz4D = std::abs( pfTrack->dz(vertex4D.position()) );
      float dz3D = std::abs( pfTrack->dz(vertex3D.position()) );
      float dzmu = std::abs( pfTrack->dz(vertex4D.position()) - iMuon.track()->dz(vertex4D.position()) );
-    
-     
-     if ( dz_sim > dz_pfCandVertex )
+     float dxy4D = std::abs( pfTrack->dxy( vertex4D.position() ));
+   
+     float dr = deltaR(iMuon.eta(),iMuon.phi(),pfCandidate.eta(),pfCandidate.phi());
+     if (!(dr>0 && dr<isoCone))  continue;
+     //if ( !(passDeltaR( isoCone, iMuon.eta(), iMuon.phi(), pfCandidate.eta(), pfCandidate.phi())) ) continue;
+     h_pfCandidate_cutflow_->Fill("dr", 1);
+
+     if (!( dz_sim < 1.0 || dz4D < 1.0 || dz3D < 1.0 || dzmu < 1.0) )
        continue;
-     h_pfCandidate_cutflow_->Fill("dz < 0.1", 1);
+     h_pfCandidate_cutflow_->Fill("loose dz", 1); 
+
      
      if ( dxy_sim < dxy_pfCandVertex ){
        thisCandPassesDxy = true;
-       h_pfCandidate_cutflow_->Fill("dxy < 0.02", 1);
+       //h_pfCandidate_cutflow_->Fill("dxy < 0.02", 1);
      }
      else
        thisCandPassesDxy = false;
@@ -600,27 +609,38 @@ int MuonIsolationAnalyzer::getMuonPFCandIso(const reco::Muon& iMuon, edm::Handle
      // kinematic cuts on PF candidate
      if ( fabs(pfCandidate.eta())<1.5){ // BTL acceptance
      //if ( fabs(pfCandidate.eta())<1.48){ // BTL acceptance
-       h_pfCandidate_cutflow_->Fill("In BTL Volume", 1);
+       //h_pfCandidate_cutflow_->Fill("In BTL Volume", 1);
      
        if (pfTrack->pt() < 0.7)
 	       continue;
-       h_pfCandidate_cutflow_->Fill("pT > 0.7 GeV", 1);
+       //h_pfCandidate_cutflow_->Fill("pT > 0.7 GeV", 1);
        
        h_muon_pfCandIso03_dxy_BTL_->Fill( dxy_sim );
        h_muon_pfCandIso03_dz_BTL_->Fill( dz_sim );
        
      }
+     h_pfCandidate_cutflow_->Fill("BTL pt", 1);
      //else if ( fabs(track->eta())>1.5 && fabs(track->eta())<2.8) { // ETL acceptance
-     else if ( fabs(pfCandidate.eta())>1.5 && fabs(pfCandidate.eta())<2.8) { // ETL acceptance
+     //else if ( fabs(pfCandidate.eta())>1.5 && fabs(pfCandidate.eta())<2.8) { // ETL acceptance
      //else if ( fabs(pfCandidate.eta())>1.48 && fabs(pfCandidate.eta())<2.8) { // ETL acceptance
+     if ( fabs(pfCandidate.eta())>1.5 ) { // ETL acceptance
        if (pfTrack->pt() < 0.4)
 	       continue;       
      }
-     else
-       continue;
+     h_pfCandidate_cutflow_->Fill("ETL pt", 1);
      
+     if ( dxy4D >= 9999. )
+       continue;
+     h_pfCandidate_cutflow_->Fill("dxy", 1);
+
+     if ( dz_sim >= dz_pfCandVertex )
+       continue;
+     if ( fabs(iMuon.eta()) < 1.5 ){
+       h_pfCandidate_cutflow_->Fill("dz", 1);
+     }
+
      // sum candidates in cone
-     if ( passDeltaR( isoCone, iMuon.eta(), iMuon.phi(), pfCandidate.eta(), pfCandidate.phi()) ) {
+     //if ( passDeltaR( isoCone, iMuon.eta(), iMuon.phi(), pfCandidate.eta(), pfCandidate.phi()) ) {
 	 numberOfAssociatedPFCandidates++;
 
        if ( timeResolution!=-1) { // timeResolution either passed by user (!=-1) or defaul (==-1, don't use)
@@ -706,7 +726,7 @@ int MuonIsolationAnalyzer::getMuonPFCandIso(const reco::Muon& iMuon, edm::Handle
 	 isolations.at(1) += pfCandidate.pt(); 
 	 
        }
-     }// end of if condition for within isoCone
+     //}// end of if condition for within isoCone
      
    } // PF Candidate loop
 
