@@ -582,13 +582,14 @@ int MuonIsolationAnalyzer::getMuonPFCandIso(const reco::Muon& iMuon, edm::Handle
      if ( std::abs(pfCandidate.eta()) < 1.48 && pfCandidate.pt() < 0.7 ) continue;
      if ( std::abs(pfCandidate.eta()) > 1.48 && pfCandidate.pt() < 0.4 ) continue;
      // calculate dxy/dz 
-     float dz_sim  = std::abs( pfTrack->vz() - genPV->position().z() ); 
+     //float dz_sim  = std::abs( pfTrack->vz() - genPV->position().z() ); 
      float dxy_sim = sqrt ( pow(pfTrack->vx() - genPV->position().x(),2) + pow(pfTrack->vy() - genPV->position().y(),2) ); 
      float dz4D = std::abs( pfTrack->dz(vertex4D.position()) );
      float dz3D = std::abs( pfTrack->dz(vertex3D.position()) );
      float dzmu = std::abs( pfTrack->dz(vertex4D.position()) - iMuon.track()->dz(vertex4D.position()) );
      float dxy4D = std::abs( pfTrack->dxy( vertex4D.position() ));
-   
+     float dz_sim = fabs(dz4D + vertex4D.z() - genPV->position().z());
+
      float dr = deltaR(iMuon.eta(),iMuon.phi(),pfCandidate.eta(),pfCandidate.phi());
      if (!(dr>0 && dr<isoCone))  continue;
      //if ( !(passDeltaR( isoCone, iMuon.eta(), iMuon.phi(), pfCandidate.eta(), pfCandidate.phi())) ) continue;
@@ -662,9 +663,11 @@ int MuonIsolationAnalyzer::getMuonPFCandIso(const reco::Muon& iMuon, edm::Handle
    //if ( targetTimeResol > defaultTimeResol) 
 	 //  extra_resol = sqrt(targetTimeResol*targetTimeResol - defaultTimeResol*defaultTimeResol); 
 
-   if ( targetTimeResol > defaultTimeResolFastSim)
-     extra_resol_FastSim = sqrt(targetTimeResol*targetTimeResol - defaultTimeResolFastSim*defaultTimeResolFastSim);
+   //if ( targetTimeResol > defaultTimeResolFastSim)
+   //  extra_resol_FastSim = sqrt(targetTimeResol*targetTimeResol - defaultTimeResolFastSim*defaultTimeResolFastSim);
 
+   if ( defaultTimeResolFastSim < 0.035 )
+     extra_resol_FastSim = sqrt( 0.035*0.035 - defaultTimeResolFastSim*defaultTimeResolFastSim);
 
 	 double dtsim = 0.;
 	 double pfCandidateTime = -999.;
@@ -691,10 +694,10 @@ int MuonIsolationAnalyzer::getMuonPFCandIso(const reco::Muon& iMuon, edm::Handle
        //double rnd   = gRandom->Gaus(0., extra_resol);
 	     //pfCandidateTime = pfCandidate.time() + rnd;
 	     // extra extra smearing 
-       double extra_smearing = sqrt(std::abs(targetTimeResol*targetTimeResol - 0.035*0.035));
+       double extra_smearing = sqrt((targetTimeResol*targetTimeResol - 0.035*0.035));
        pfCandidateTime = pfCandidateTime + gRandom3->Gaus(0,extra_smearing);
        dtsim = std::abs(pfCandidateTime - genPV->position().t()*1000000000.);
-	     //cout << "  target time resol = "<< targetTimeResol << "  extra_resol = "<< extra_resol_FastSim << "  extra rnd = " << extra_smearing << "  pfCandidate time = " << pfCandidateTime << "  dtsim = " << dtsim << endl;
+	     cout << "  target time resol = "<< targetTimeResol << "  extra_resol = "<< extra_resol_FastSim << "  extra rnd = " << extra_smearing << "  pfCandidate time = " << pfCandidateTime << "  dtsim = " << dtsim << endl;
 	   }
 	   else
 	     dtsim = 0.;
