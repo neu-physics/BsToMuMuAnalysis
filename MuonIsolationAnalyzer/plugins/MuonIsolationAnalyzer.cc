@@ -88,7 +88,7 @@ class MuonIsolationAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResour
 
       static void fillDescriptions(edm::ConfigurationDescriptions& descriptions);
       float getMuonPFRelIso(const reco::Muon&) const;
-      int getMuonPFCandIso(const reco::Muon&, edm::Handle<std::vector<reco::PFCandidate> >& pfCandHandle, const SimVertex *genPV, std::vector<float> &isolations, edm::Handle<ValueMap<float> > trackFastSimTimeValueMap, edm::Handle<ValueMap<float> > trackFastSimTimeErrValueMap, double timeResolution=-1 ) const;
+      int getMuonPFCandIso(const reco::Muon&, edm::Handle<std::vector<reco::PFCandidate> >& pfCandHandle, const SimVertex *genPV, std::vector<float> &isolations, edm::Handle<ValueMap<float> > trackFastSimTimeValueMap, edm::Handle<ValueMap<float> > trackFastSimTimeErrValueMap, double timeResolution=-1, int n_evt=0 ) const;
       bool  isGoodMuon(const reco::Muon&,  edm::Handle<std::vector<reco::GenParticle> >& genHandle, edm::Handle<std::vector<reco::GenJet> >& genJetHandle, const SimVertex *genPV) const;
       int   ttbarDecayMode(edm::Handle<std::vector<reco::GenParticle> >& genHandle);
       void  getPromptTruthMuons(edm::Handle<std::vector<reco::GenParticle> >& genHandle);
@@ -143,6 +143,9 @@ class MuonIsolationAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResour
       //SimVertex genPV;
 
       bool isZmumuSignal_;
+      TRandom *gRandom;
+      TRandom *gRandom2;
+      TRandom *gRandom3;
       //string lastFourFileID_;
       vector<const reco::Candidate*> promptMuonTruthCandidates_; 
       float coneSize_muonToGetJet;
@@ -226,7 +229,9 @@ MuonIsolationAnalyzer::MuonIsolationAnalyzer(const edm::ParameterSet& iConfig):
   //lastFourFileID_(iConfig.getParameter<string>("lastFourFileID"))
 {
    //now do what ever initialization is needed
-
+  gRandom = new TRandom();
+  gRandom2 = new TRandom();
+  gRandom3 = new TRandom();
   //---outputs
   //edm::Service<TFileService> fs_; 
 
@@ -263,7 +268,8 @@ MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
 
    btlEfficiency = 0.85;
    etlEfficiency = 0.90;
-   
+  
+   int n_evt = iEvent.id().event();
    //Handle<TrackCollection> tracks;
    //iEvent.getByToken(tracksToken_, tracks);
 
@@ -447,7 +453,7 @@ MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
      float pfRelIso03 = getMuonPFRelIso( muon );
      // ** B. "TDR-like" isolation using PFCandidates
      std::vector<float> pfCandIso03 = {0, 0, 0, 0}; // 0th: nominal isolation, 1st: no dxy cut, 2nd: nominal + 3sigma timing cut, 3rd: no dxy + 3sigma timing cut
-     int nPFCandidatesInCone = getMuonPFCandIso( muon, pfCandHandle_, genPV, pfCandIso03, trackFastSimTimeValueMap, trackFastSimTimeErrValueMap, 0.040 );
+     int nPFCandidatesInCone = getMuonPFCandIso( muon, pfCandHandle_, genPV, pfCandIso03, trackFastSimTimeValueMap, trackFastSimTimeErrValueMap, 0.040, n_evt );
      //if (nPFCandidatesInCone == 0) continue;      // FIXME: come up with way to skip filling if pfCand sum is 0 --> this may be what causes slightly higher inefficiency
 
 
@@ -544,7 +550,7 @@ MuonIsolationAnalyzer::endJob()
 {
 }
 
-int MuonIsolationAnalyzer::getMuonPFCandIso(const reco::Muon& iMuon, edm::Handle<std::vector<reco::PFCandidate> >& pfCandHandle, const SimVertex *genPV, std::vector<float> &isolations, edm::Handle<ValueMap<float> > trackFastSimTimeValueMap, edm::Handle<ValueMap<float> > trackFastSimTimeErrValueMap, double timeResolution) const
+int MuonIsolationAnalyzer::getMuonPFCandIso(const reco::Muon& iMuon, edm::Handle<std::vector<reco::PFCandidate> >& pfCandHandle, const SimVertex *genPV, std::vector<float> &isolations, edm::Handle<ValueMap<float> > trackFastSimTimeValueMap, edm::Handle<ValueMap<float> > trackFastSimTimeErrValueMap, double timeResolution, int n_evt) const
 {
   //float sumPFCandPtInCone = 0.0; 
   float isoCone = 0.3;
@@ -649,9 +655,8 @@ int MuonIsolationAnalyzer::getMuonPFCandIso(const reco::Muon& iMuon, edm::Handle
 	 double pfcandtimeErrFastSim = (*trackFastSimTimeErrValueMap)[pfTrack];
    //double pfcandtimeFastSim = (*trackTimeValueMap)[pfTrack];
 	 //double pfcandtimeErrFastSim = (*trackTimeErrValueMap)[pfTrack];
-   TRandom *gRandom = new TRandom();
-   TRandom *gRandom2 = new TRandom();
-   TRandom *gRandom3 = new TRandom();
+   //TRandom *gRandom = new TRandom();
+   //std::cout << "1: " << gRandom->GetSeed() << " 2: " << gRandom2->GetSeed() << " 3: " << gRandom3->GetSeed() << std::endl;
    double targetTimeResol = timeResolution;
 	 //double defaultTimeResol  = 0.;
    double defaultTimeResolFastSim  = pfcandtimeErrFastSim;
@@ -671,39 +676,37 @@ int MuonIsolationAnalyzer::getMuonPFCandIso(const reco::Muon& iMuon, edm::Handle
 
 	 double dtsim = 0.;
 	 double pfCandidateTime = -999.;
-	 if(1) {
    //if ( pfCandidate.isTimeValid() && !isnan( pfCandidate.time() )) {
-	   // -- emulate BTL and ETL efficiency
-	   bool keepTrack = true;
+	 // -- emulate BTL and ETL efficiency
+	 bool keepTrack = true;
 
-	   // introduce inefficiency loss to mirror more realistic detector behaviour, [BBT 08-23-19: COMMENT OUT FOR NOW]
-	   double rndEff = gRandom2->Uniform(0.,1.);
-     //std::cout << "eff: " << rndEff << std::endl;
-     //std::cout << "KeepTrack: " << (int) keepTrack << std::endl;
-	   if ( std::abs(pfCandidate.eta()) < 1.5 && rndEff > btlEfficiency ) keepTrack = false; 
-	   if ( std::abs(pfCandidate.eta()) > 1.5 && rndEff > etlEfficiency ) keepTrack = false; 
+	 // introduce inefficiency loss to mirror more realistic detector behaviour, [BBT 08-23-19: COMMENT OUT FOR NOW]
+	 //gRandom2->SetSeed(0);
+   double rndEff = gRandom2->Uniform(0.,1.);
+   //std::cout << "eff: " << rndEff << std::endl;
+   //std::cout << "KeepTrack: " << (int) keepTrack << std::endl;
+	 if ( std::abs(pfCandidate.eta()) < 1.5 && rndEff > btlEfficiency ) keepTrack = false; 
+	 if ( std::abs(pfCandidate.eta()) > 1.5 && rndEff > etlEfficiency ) keepTrack = false; 
 
-     if ( pfcandtimeErrFastSim !=-1 ){
-       double rndFastSim = gRandom->Gaus(0., extra_resol_FastSim);
-       pfCandidateTime = pfcandtimeFastSim + rndFastSim;
-       //std::cout << "rndFastSim = " << rndFastSim;
-     }
-	   if ((keepTrack) && (pfCandidateTime!=-999) ) {
-	     // -- extra smearing to emulate different time resolution
-	     
-       //double rnd   = gRandom->Gaus(0., extra_resol);
-	     //pfCandidateTime = pfCandidate.time() + rnd;
-	     // extra extra smearing 
-       double extra_smearing = sqrt((targetTimeResol*targetTimeResol - 0.035*0.035));
-       pfCandidateTime = pfCandidateTime + gRandom3->Gaus(0,extra_smearing);
-       dtsim = std::abs(pfCandidateTime - genPV->position().t()*1000000000.);
-	     cout << "  target time resol = "<< targetTimeResol << "  extra_resol = "<< extra_resol_FastSim << "  extra rnd = " << extra_smearing << "  pfCandidate time = " << pfCandidateTime << "  dtsim = " << dtsim << endl;
-	   }
-	   else
-	     dtsim = 0.;
+   if ( pfcandtimeErrFastSim !=-1 ){
+     //gRandom->SetSeed(n_evt);
+     double rndFastSim = gRandom->Gaus(0., extra_resol_FastSim);
+     pfCandidateTime = pfcandtimeFastSim + rndFastSim;
+     //std::cout <<"nevt: " << n_evt << " rnd: " << rndFastSim << " time: " << pfCandidateTime << " resol: " << extra_resol_FastSim << std::endl;
+     //std::cout << "rndFastSim = " << rndFastSim;
+   }
+	 //if ((keepTrack) && (pfCandidateTime!=-999) ) {
+	 if(pfCandidateTime!=-999) {
+     // -- extra smearing to emulate different time resolution
+     double extra_smearing = sqrt((targetTimeResol*targetTimeResol - 0.035*0.035));
+     //gRandom3->SetSeed(0);
+     pfCandidateTime = pfCandidateTime + gRandom3->Gaus(0,extra_smearing);
+     //dtsim = std::abs(pfCandidateTime - genPV->position().t()*1000000000.);
+	   //cout << "  target time resol = "<< targetTimeResol << "  extra_resol = "<< extra_resol_FastSim << "  extra rnd = " << extra_smearing << "  pfCandidate time = " << pfCandidateTime << "  dtsim = " << dtsim << endl;
 	 }
-	 else
-	   dtsim = 0.;
+   dtsim = std::abs(pfCandidateTime - genPV->position().t()*1000000000.);
+	 //else
+	   //dtsim = 0.;
 
 	 // *** A. Fill all candidates
 	 // ** 0. Nominal
@@ -712,13 +715,24 @@ int MuonIsolationAnalyzer::getMuonPFCandIso(const reco::Muon& iMuon, edm::Handle
 	 // ** 1. No Dxy
 	 isolations.at(1) += pfCandidate.pt(); 
 	 // *** B. Fill candidate times if within 3 sigma
-	 if (dtsim < 3.*targetTimeResol){
+	 //if (dtsim < 3.*targetTimeResol){
+   //if ((keepTrack && pfCandidateTime!=-999 && dtsim > 3.*targetTimeResol)){if (fabs(iMuon.eta()) < 1.5)  std::cout << "false: " << keepTrack << pfCandidateTime << dtsim << targetTimeResol << std::endl;}
+   //else{
+   if (!(keepTrack && pfCandidateTime!=-999 && dtsim > 3.*targetTimeResol)){
+     if ( fabs(iMuon.eta()) < 1.5 ){
+       h_pfCandidate_cutflow_->Fill("time", 1);
+     }
 	   // ** 2. Nominal + 3sigma cut on timing
 	   if(thisCandPassesDxy)
 	     isolations.at(2) += pfCandidate.pt(); // nominal + 3sigma timing
 	   // ** 3. No Dxy + 3sigma cut on timing
 	   isolations.at(3) += pfCandidate.pt();  // no Dxy + 3sigma timing
 	 }
+   else{
+     if (fabs(iMuon.eta())<1.5){
+       std::cout << "false: " << keepTrack << pfCandidateTime << dtsim << targetTimeResol << std::endl;
+     }
+   }
 
        } // end timing
        else { // no check on timing
