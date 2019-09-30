@@ -588,9 +588,9 @@ int MuonIsolationAnalyzer::getMuonPFCandIso(const reco::Muon& iMuon, edm::Handle
      if ( std::abs(pfCandidate.eta()) < 1.48 && pfCandidate.pt() < 0.7 ) continue;
      if ( std::abs(pfCandidate.eta()) > 1.48 && pfCandidate.pt() < 0.4 ) continue;
      // calculate dxy/dz 
-     //float dz_sim  = std::abs( pfTrack->vz() - genPV->position().z() ); 
+     float dzsim  = std::abs( pfTrack->vz() - genPV->position().z() ); 
      float dxy_sim = sqrt ( pow(pfTrack->vx() - genPV->position().x(),2) + pow(pfTrack->vy() - genPV->position().y(),2) ); 
-     float dz4D = std::abs( pfTrack->dz(vertex4D.position()) );
+     float dz4D = pfTrack->dz(vertex4D.position());
      float dz3D = std::abs( pfTrack->dz(vertex3D.position()) );
      float dzmu = std::abs( pfTrack->dz(vertex4D.position()) - iMuon.track()->dz(vertex4D.position()) );
      float dxy4D = std::abs( pfTrack->dxy( vertex4D.position() ));
@@ -601,9 +601,13 @@ int MuonIsolationAnalyzer::getMuonPFCandIso(const reco::Muon& iMuon, edm::Handle
      //if ( !(passDeltaR( isoCone, iMuon.eta(), iMuon.phi(), pfCandidate.eta(), pfCandidate.phi())) ) continue;
      h_pfCandidate_cutflow_->Fill("dr", 1);
 
-     if (!( dz_sim < 1.0 || dz4D < 1.0 || dz3D < 1.0 || dzmu < 1.0) )
+     if ( ( dzsim < 1.0 || (std::abs(dz4D) < 1.0) || dz3D < 1.0 || dzmu < 1.0) )
+     {
+       h_pfCandidate_cutflow_->Fill("loose dz", 1);
+     }
+     else
        continue;
-     h_pfCandidate_cutflow_->Fill("loose dz", 1); 
+     //h_pfCandidate_cutflow_->Fill("loose dz", 1); 
 
      
      if ( dxy_sim < dxy_pfCandVertex ){
@@ -643,6 +647,7 @@ int MuonIsolationAnalyzer::getMuonPFCandIso(const reco::Muon& iMuon, edm::Handle
      if ( dz_sim >= dz_pfCandVertex )
        continue;
      if ( fabs(iMuon.eta()) < 1.5 ){
+       //std::cout << "dz_sim: " << dz_sim << " dz4D: " << dz4D << " vtxZ: " << vertex4D.z() << " genZ: " << genPV->position().z() << std::endl;
        h_pfCandidate_cutflow_->Fill("dz", 1);
      }
 
@@ -681,16 +686,18 @@ int MuonIsolationAnalyzer::getMuonPFCandIso(const reco::Muon& iMuon, edm::Handle
 	 bool keepTrack = true;
 
 	 // introduce inefficiency loss to mirror more realistic detector behaviour, [BBT 08-23-19: COMMENT OUT FOR NOW]
-	 //gRandom2->SetSeed(0);
+	 gRandom2->SetSeed(n_evt);
    double rndEff = gRandom2->Uniform(0.,1.);
+   //double rndEff = 0;
    //std::cout << "eff: " << rndEff << std::endl;
    //std::cout << "KeepTrack: " << (int) keepTrack << std::endl;
-	 if ( std::abs(pfCandidate.eta()) < 1.5 && rndEff > btlEfficiency ) keepTrack = false; 
-	 if ( std::abs(pfCandidate.eta()) > 1.5 && rndEff > etlEfficiency ) keepTrack = false; 
+	 //if ( std::abs(pfCandidate.eta()) < 1.5 && rndEff > btlEfficiency ) keepTrack = false; 
+	 //if ( std::abs(pfCandidate.eta()) > 1.5 && rndEff > etlEfficiency ) keepTrack = false; 
 
    if ( pfcandtimeErrFastSim !=-1 ){
-     //gRandom->SetSeed(n_evt);
+     gRandom->SetSeed(n_evt);
      double rndFastSim = gRandom->Gaus(0., extra_resol_FastSim);
+     //double rndFastSim = 0;
      pfCandidateTime = pfcandtimeFastSim + rndFastSim;
      //std::cout <<"nevt: " << n_evt << " rnd: " << rndFastSim << " time: " << pfCandidateTime << " resol: " << extra_resol_FastSim << std::endl;
      //std::cout << "rndFastSim = " << rndFastSim;
@@ -699,7 +706,7 @@ int MuonIsolationAnalyzer::getMuonPFCandIso(const reco::Muon& iMuon, edm::Handle
 	 if(pfCandidateTime!=-999) {
      // -- extra smearing to emulate different time resolution
      double extra_smearing = sqrt((targetTimeResol*targetTimeResol - 0.035*0.035));
-     //gRandom3->SetSeed(0);
+     gRandom3->SetSeed(n_evt);
      pfCandidateTime = pfCandidateTime + gRandom3->Gaus(0,extra_smearing);
      //dtsim = std::abs(pfCandidateTime - genPV->position().t()*1000000000.);
 	   //cout << "  target time resol = "<< targetTimeResol << "  extra_resol = "<< extra_resol_FastSim << "  extra rnd = " << extra_smearing << "  pfCandidate time = " << pfCandidateTime << "  dtsim = " << dtsim << endl;
@@ -730,7 +737,7 @@ int MuonIsolationAnalyzer::getMuonPFCandIso(const reco::Muon& iMuon, edm::Handle
 	 }
    else{
      if (fabs(iMuon.eta())<1.5){
-       std::cout << "false: " << keepTrack << pfCandidateTime << dtsim << targetTimeResol << std::endl;
+       //std::cout << "false: " << keepTrack << pfCandidateTime << dtsim << targetTimeResol << std::endl;
      }
    }
 
