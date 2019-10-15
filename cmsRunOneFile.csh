@@ -4,14 +4,14 @@ echo "Starting job on " `date` #Date/time of start of job
 echo "Running on: `uname -a`" #Condor job is running on this node
 echo "System software: `cat /etc/redhat-release`" #Operating System on that node
 source /cvmfs/cms.cern.ch/cmsset_default.sh  ## if a bash script, use .sh instead of .csh
-export SCRAM_ARCH=slc6_amd64_gcc700
+export SCRAM_ARCH=slc7_amd64_gcc700
 eval "scramv1 project CMSSW CMSSW_10_4_0_mtd5"
 cd CMSSW_10_4_0_mtd5/src/
 eval `scramv1 runtime -sh` # cmsenv is an alias not on the workers           
 echo "CMSSW: "$CMSSW_BASE                                               
 
 
-xrdcp -s root://cmseos.fnal.gov//store/user/benjtann/$5/$4 .
+xrdcp -s root://cmseos.fnal.gov//store/user/ali/$5/$4 .
 tar -xf $4
 rm $4
 
@@ -29,7 +29,7 @@ ls ./*.root
 echo "List all files"
 ls 
 echo "*******************************************"
-OUTDIR=root://cmseos.fnal.gov//store/user/benjtann/$5/
+OUTDIR=root://cmseos.fnal.gov//store/user/ali/$5/
 echo "xrdcp output for condor"
 for FILE in ./*.root
 do

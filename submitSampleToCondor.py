@@ -63,11 +63,11 @@ else:
 # *** 1. Create .tar of directory and store in personal EOS
 print "##########     Tarring workdir     ##########"
 tarball_name = "{0}.tar.gz".format(args.outputDir)
-os.system("cd /uscms_data/d2/benjtann/MTD_DPG/CMSSW_10_4_0_mtd5/src/; tar -cvzf {0} BsToMuMuAnalysis --exclude '.git' --exclude 'test_*' --exclude 'submitOneFile_' --exclude '*.tar.gz' --exclude '*-19_*' --exclude '*2019' --exclude 'pass*' --exclude '.SCRAM*' --exclude 'tmp' --exclude 'lib' --exclude 'config' --exclude 'external' --exclude '*notes_*.txt*' --exclude '08-*19' --exclude '*.root'; cd /uscms_data/d2/benjtann/MTD_DPG/CMSSW_10_4_0_mtd5/src/BsToMuMuAnalysis ; mv /uscms_data/d2/benjtann/MTD_DPG/CMSSW_10_4_0_mtd5/src/{0} .".format(tarball_name))
-if ( not os.path.exists("/eos/uscms/store/user/benjtann/{0}/".format(args.outputDir)) ):
-    os.system("mkdir /eos/uscms/store/user/benjtann/{0}/".format(args.outputDir))
+os.system("cd /uscms_data/d3/ali/BstoMuMu/space/CMSSW_10_4_0_mtd5/src; tar -cvzf {0} BsToMuMuAnalysis --exclude '*10*' --exclude '*09*' --exclude '*0901*' --exclude '.git' --exclude 'test_*' --exclude 'submitOneFile_' --exclude '*.tar.gz' --exclude '*-19_*' --exclude '*2019' --exclude 'pass*' --exclude '.SCRAM*' --exclude 'tmp' --exclude 'lib' --exclude 'config' --exclude 'external' --exclude '*notes_*.txt*' --exclude '08-*19' --exclude '*.root'; cd /uscms_data/d3/ali/BstoMuMu/space/CMSSW_10_4_0_mtd5/src/BsToMuMuAnalysis; mv /uscms_data/d3/ali/BstoMuMu/space/CMSSW_10_4_0_mtd5/src/{0} .".format(tarball_name))
+if ( not os.path.exists("/eos/uscms/store/user/ali/{0}/".format(args.outputDir)) ):
+    os.system("mkdir /eos/uscms/store/user/ali/{0}/".format(args.outputDir))
 
-os.system("xrdcp {0} root://cmseos.fnal.gov//store/user/benjtann/{1}/".format(tarball_name, args.outputDir))
+os.system("xrdcp {0} root://cmseos.fnal.gov//store/user/ali/{1}/".format(tarball_name, args.outputDir))
 
 # *** 2. Create temporary .pdl file for condor submission
 print "\n##########     Submitting Condor jobs     ##########\n"
