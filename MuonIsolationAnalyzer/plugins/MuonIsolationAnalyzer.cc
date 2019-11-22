@@ -455,7 +455,7 @@ MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
        if (vrtxRefit.size()<5) continue;
        //std::cout << "vtx has more than 5 tracks" << std::endl;
        TransientVertex newVtx;
-       newVtx = avf.vertex(vrtxRefit);
+       //newVtx = avf.vertex(vrtxRefit);
        newVtx = avf.vertex(vrtxRefit,beamSpot);
        if (!newVtx.isValid()) continue;
        //std::cout << "refit succeeded" << std::endl;
