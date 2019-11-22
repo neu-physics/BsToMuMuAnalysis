@@ -61,12 +61,19 @@
 #include "DataFormats/ParticleFlowCandidate/interface/PFCandidate.h"
 #include "DataFormats/RecoCandidate/interface/RecoCandidate.h"
 
+#include "HLTrigger/HLTcore/interface/HLTConfigProvider.h"
+#include "DataFormats/Common/interface/TriggerResults.h"
+#include "FWCore/Common/interface/TriggerNames.h"
+#include "FWCore/Common/interface/TriggerResultsByName.h"
+#include "DataFormats/HLTReco/interface/TriggerObject.h"
+
 #include "BsToMuMuAnalysis/MuonIsolationAnalyzer/interface/Utils.h"
 
 #include "TH1.h"
 #include "TH2.h"
 #include "TRandom.h"
 #include "TTree.h"
+#include "TLorentzVector.h"
 
 //
 // class declaration
@@ -77,7 +84,9 @@
 // from  edm::one::EDAnalyzer<>
 // This will improve performance in multithreaded jobs.
 
+using namespace edm;
 using namespace std;
+using namespace reco;
 
 struct eventInfo
 {
@@ -93,7 +102,7 @@ struct eventInfo
 //using reco::TrackCollection;
 //using reco::MuonCollection;
 
-class MuonIsolationAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResources>  {
+class MuonIsolationAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResources, edm::one::WatchRuns>  {
    public:
       explicit MuonIsolationAnalyzer(const edm::ParameterSet&);
       ~MuonIsolationAnalyzer();
@@ -104,7 +113,7 @@ class MuonIsolationAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResour
       static void fillDescriptions(edm::ConfigurationDescriptions& descriptions);
       float getMuonPFRelIso(const reco::Muon&) const;
       int getMuonPFCandIso(const reco::Muon&, edm::Handle<std::vector<reco::PFCandidate> >& pfCandHandle, const SimVertex *genPV, std::vector<float> &isolations, edm::Handle<ValueMap<float> > trackFastSimTimeValueMap, edm::Handle<ValueMap<float> > trackFastSimTimeErrValueMap, double timeResolution=-1, int n_evt=0 ) const;
-      bool  isGoodMuon(const reco::Muon&,  edm::Handle<std::vector<reco::GenParticle> >& genHandle, edm::Handle<std::vector<reco::GenJet> >& genJetHandle, const SimVertex *genPV) const;
+      bool  isGoodMuon(const reco::Muon&,  edm::Handle<std::vector<reco::GenParticle> >& genHandle, edm::Handle<std::vector<reco::GenJet> >& genJetHandle, const SimVertex *genPV, bool ForMatchUse=false) const;
       int   ttbarDecayMode(edm::Handle<std::vector<reco::GenParticle> >& genHandle);
       void  getPromptTruthMuons(edm::Handle<std::vector<reco::GenParticle> >& genHandle);
       const reco::Candidate * GetObjectJustBeforeDecay( const reco::Candidate * particle );
@@ -113,9 +122,12 @@ class MuonIsolationAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResour
       bool passDeltaR( float coneSize, float eta1, float phi1, float eta2, float phi2) const;
 
    private:
+      //virtual void beginJob(const edm::Run&, const edm::EventSetup&);
       virtual void beginJob() override;
       virtual void analyze(const edm::Event&, const edm::EventSetup&) override;
       virtual void endJob() override;
+      virtual void beginRun(edm::Run const&, edm::EventSetup const&) override;
+      virtual void endRun(edm::Run const&, edm::EventSetup const&) override;
       
       void initEventStructure();
 
@@ -146,6 +158,8 @@ class MuonIsolationAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResour
       edm::Handle< ROOT::Math::PositionVector3D<ROOT::Math::Cartesian3D<float>,ROOT::Math::DefaultCoordinateSystemTag> > genXYZHandle_;
       edm::EDGetTokenT<float>                              genT0Token_;    
       edm::Handle<float>                                   genT0Handle_;
+      edm::EDGetTokenT<reco::BeamSpot> beamSpotToken_;
+      edm::Handle<reco::BeamSpot> beamSpotHandle_;
       edm::EDGetTokenT<ValueMap<float> > trackTimeToken_;
       edm::Handle<ValueMap<float> > trackTimeValueMap;
       edm::EDGetTokenT<ValueMap<float> > trackTimeErrToken_;
@@ -154,12 +168,18 @@ class MuonIsolationAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResour
       edm::Handle<ValueMap<float> > trackFastSimTimeValueMap;
       edm::EDGetTokenT<ValueMap<float> > trackFastSimTimeErrToken_;
       edm::Handle<ValueMap<float> > trackFastSimTimeErrValueMap;
+      edm::EDGetTokenT<edm::TriggerResults> triggerResultsToken_;
+      edm::Handle<edm::TriggerResults>           triggerResultsHandle_;
+
+      HLTConfigProvider hltConfig_;
 
       reco::Vertex vertex3D;
       reco::Vertex vertex4D;
       //SimVertex genPV;
 
       bool isZmumuSignal_;
+      bool isBmumu_;
+      std::string   processName_;
       TRandom *gRandom;
       TRandom *gRandom2;
       TRandom *gRandom3;
@@ -212,5 +232,7 @@ class MuonIsolationAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResour
       TH1* h_muon_pT;
       TH1* h_muon_numCand;
       TH1* h_pfCandidate_cutflow_;    
+      TH1* h_pfCandidate_cutflow_4_;
+      TH1* h_pfCandidate_cutflow_20_;
 
 };

@@ -28,7 +28,7 @@ if (args.inputDir != ""):
 else:
   print('!!! no inputDir!!!')
 
-Iso_range = [4,10,20,27,38,50]
+Iso_range = [4,20]
 
 histos = {}
 

@@ -54,4 +54,12 @@ bool isFromTau(const reco::Muon &muon, edm::Handle<std::vector<reco::GenParticle
 bool isMatchedToGenParticle(const reco::PFCandidate &pfcand, const edm::View<reco::GenParticle>& genParticles);
 bool isUnmatchedToGenParticle(const reco::PFCandidate &pfcand, const edm::View<reco::GenParticle>& genParticles);
 
+bool isMatchedToBMMDaughter(const reco::Muon& muon, std::vector<const reco::Candidate*> TrueMVector);
+std::vector<const reco::Candidate*> BDaughters(edm::Handle<std::vector<reco::GenParticle> >& genHandle);
+void FindMother(const reco::Candidate* Part, int rank);
+bool PrintLeptonDaughters(edm::Handle<std::vector<reco::GenParticle> >& genHandle, const reco::Candidate * W_new, unsigned int id);
+void FindtWbMuons(edm::Handle<std::vector<reco::GenParticle> >& genHandle);
+const reco::Candidate * GetObjectBeforeDecay( const reco::Candidate * particle );
+double GetdR(double eta1, double phi1, double eta2, double phi2);
+
 #endif

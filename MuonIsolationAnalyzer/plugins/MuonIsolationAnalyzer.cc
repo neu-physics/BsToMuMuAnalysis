@@ -1,5 +1,36 @@
 
 
+#include "TrackingTools/PatternTools/interface/ClosestApproachInRPhi.h"
+#include "TrackingTools/TransientTrack/interface/TransientTrack.h"
+#include "TrackingTools/TransientTrack/interface/TransientTrackBuilder.h"
+#include "TrackingTools/Records/interface/TransientTrackRecord.h"
+#include "MagneticField/Records/interface/IdealMagneticFieldRecord.h"
+
+#include "FWCore/Framework/interface/ESHandle.h"
+#include "FWCore/Framework/interface/EDProducer.h"
+#include "FWCore/Framework/interface/Frameworkfwd.h"
+#include "FWCore/Framework/interface/Event.h"
+#include "FWCore/Framework/interface/MakerMacros.h"
+#include "FWCore/Framework/interface/EDAnalyzer.h"
+#include "FWCore/Framework/interface/EventSetup.h"
+
+#include "MagneticField/Engine/interface/MagneticField.h"
+#include "DataFormats/BeamSpot/interface/BeamSpot.h"
+#include "DataFormats/GeometryCommonDetAlgo/interface/Measurement1D.h"
+#include "FWCore/Framework/interface/IOVSyncValue.h"
+#include "TrackingTools/GeomPropagators/interface/Propagator.h"
+
+#include "RecoVertex/KinematicFit/interface/KinematicParticleFitter.h"
+#include "RecoVertex/KinematicFit/interface/KinematicParticleVertexFitter.h"
+#include "RecoVertex/AdaptiveVertexFit/interface/AdaptiveVertexFitter.h"
+#include "RecoVertex/VertexPrimitives/interface/ConvertToFromReco.h"
+#include "RecoVertex/VertexPrimitives/interface/TransientVertex.h"
+#include "RecoVertex/KinematicFitPrimitives/interface/KinematicParticleFactoryFromTransientTrack.h"
+#include "TrackingTools/GeomPropagators/interface/AnalyticalImpactPointExtrapolator.h"
+#include "TrackingTools/IPTools/interface/IPTools.h"
+
+#include "DataFormats/Common/interface/Handle.h"
+#include "TrackingTools/PatternTools/interface/TwoTrackMinimumDistance.h"
 #include "BsToMuMuAnalysis/MuonIsolationAnalyzer/interface/MuonIsolationAnalyzer.h"
 
 
@@ -28,11 +59,15 @@ MuonIsolationAnalyzer::MuonIsolationAnalyzer(const edm::ParameterSet& iConfig):
   //genXYZToken_(consumes<genXYZ>(iConfig.getUntrackedParameter<edm::InputTag>("genXYZTag"))),    
   genXYZToken_(consumes< ROOT::Math::PositionVector3D<ROOT::Math::Cartesian3D<float>,ROOT::Math::DefaultCoordinateSystemTag> >(iConfig.getUntrackedParameter<edm::InputTag>("genXYZTag"))),
   genT0Token_(consumes<float>(iConfig.getUntrackedParameter<edm::InputTag>("genT0Tag"))),
+  beamSpotToken_(consumes<reco::BeamSpot>(iConfig.getUntrackedParameter<edm::InputTag>("BSTag"))),
   trackTimeToken_( consumes<ValueMap<float> >( iConfig.getParameter<InputTag>( "TrackTimeValueMapTag" ) ) ),
   trackTimeErrToken_( consumes<ValueMap<float> >( iConfig.getParameter<InputTag>( "TrackTimeErrValueMapTag" ) ) ),
   trackFastSimTimeToken_( consumes<ValueMap<float> >( iConfig.getParameter<InputTag>( "TrackFastSimTimeValueMapTag" ) ) ),
   trackFastSimTimeErrToken_( consumes<ValueMap<float> >( iConfig.getParameter<InputTag>( "TrackFastSimTimeErrValueMapTag" ) ) ),
-  isZmumuSignal_(iConfig.getParameter<bool>("isZmumuSignal"))
+  triggerResultsToken_(consumes<edm::TriggerResults> (iConfig.getUntrackedParameter<InputTag>("TriggerTag"))),
+  isZmumuSignal_(iConfig.getParameter<bool>("isZmumuSignal")),
+  isBmumu_(iConfig.getParameter<bool>("isBmumu")),
+  processName_(iConfig.getUntrackedParameter<string>("processName"))
   //lastFourFileID_(iConfig.getParameter<string>("lastFourFileID"))
 {
 
@@ -102,6 +137,34 @@ MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
    iEvent.getByToken( trackFastSimTimeToken_, trackFastSimTimeValueMap );
    iEvent.getByToken( trackFastSimTimeErrToken_, trackFastSimTimeErrValueMap );
 
+   // *** Load Trigger paths (not used for now)
+   iEvent.getByToken(triggerResultsToken_,triggerResultsHandle_);
+   if (!triggerResultsHandle_.isValid()) {
+     cout << "****Error in getting TriggerResults product from Event!" << endl;
+     return;
+   }
+   std::vector<std::string> triggerNames = hltConfig_.triggerNames();
+   for (unsigned int iPath=0; iPath<triggerNames.size();++iPath){
+     std::string pathName = triggerNames[iPath];
+     //std::cout << "HLT path name: " << pathName << std::endl;
+   }
+
+   //****load magnetic field
+   ESHandle<MagneticField> bFieldHandle;
+   iSetup.get<IdealMagneticFieldRecord>().get(bFieldHandle);
+   
+   //****load BeamSpot
+   reco::BeamSpot beamSpot;
+   iEvent.getByToken(beamSpotToken_, beamSpotHandle_);
+   if ( beamSpotHandle_.isValid() )
+   {
+     beamSpot = *beamSpotHandle_;
+   } 
+   else
+   {
+     std::cout << "No beam spot available from EventSetup " << std::endl;
+   }
+
 
    initEventStructure();
    //---get truth PV
@@ -114,12 +177,6 @@ MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
    else {
      std::cout << "oh actually sometimes we don't find a gen pv" << std::endl;
      return;
-     /*auto xyz = genXYZHandle_.product();
-     auto t = *genT0Handle_.product();
-     auto v = math::XYZVectorD(xyz->x(), xyz->y(), xyz->z());
-     //genPV = const_cast<SimVertex&>(v, t);
-     genPV = SimVertex(v, t);
-     */
    }
 
       
@@ -176,17 +233,33 @@ MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
        // }
    
    
-   if (vtx_index_3D == -1) // no good PV found
-     vtx_index_3D = 0;
-   if (vtx_index_4D == -1)
-     vtx_index_4D = 0;
-   vertex3D = (*vertex3DHandle_)[vtx_index_3D];
-   vertex4D = (*vertex4DHandle_)[vtx_index_4D];
-           
-   //vertex = (*genPV);
-   //vertex = (genVertexHandle_.product()->at(0));
-   h_event_cutflow_->Fill("Good Vertex", 1);
-   
+   if(!isBmumu_){
+     if (vtx_index_3D == -1) // no good PV found
+       vtx_index_3D = 0;
+     if (vtx_index_4D == -1)
+       vtx_index_4D = 0;
+     vertex3D = (*vertex3DHandle_)[vtx_index_3D];
+     vertex4D = (*vertex4DHandle_)[vtx_index_4D];
+             
+     //vertex = (*genPV);
+     //vertex = (genVertexHandle_.product()->at(0));
+     
+
+     if(vertex4D.isFake())
+       return;
+     h_event_cutflow_->Fill("4D vtx not fake", 1);
+     if (vertex3D.isFake())
+       return;
+     h_event_cutflow_->Fill("3D vtx not fake", 1); 
+     
+     if (fabs(vertex4D.z()-genPV->position().z()) > 0.01 )
+       return;
+     h_event_cutflow_->Fill("dz(4D vtx,genPV)<0.01cm", 1);
+     
+     if (fabs(vertex3D.z()-genPV->position().z()) > 0.01 )
+       return;
+     h_event_cutflow_->Fill("dz(3D vtx,genPV)<0.01cm", 1);
+   }
 
 
    /*
@@ -236,8 +309,25 @@ MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
    int decayMode = -1;
    iEvent.getByToken(genToken_,genHandle_);
    getPromptTruthMuons( genHandle_ );
+   //if ((!isZmumuSignal_)&&(!isBmumu_))
+   //  FindtWbMuons(genHandle_);
 
-   if (!isZmumuSignal_) // background ttbar
+   //for(size_t iGenParticle=0; iGenParticle<genHandle_->size();iGenParticle++){
+   //  //if((fabs((*genHandle_)[iGenParticle].pdgId())>=500) && (fabs((*genHandle_)[iGenParticle].pdgId())<1000)){
+   //  if(fabs((*genHandle_)[iGenParticle].pdgId())==13){
+   //    const reco::Candidate * genCandidate = &(*genHandle_)[iGenParticle] ;
+   //    std::cout << "PdgId: " << (*genHandle_)[iGenParticle].pdgId() << " status: " << (*genHandle_)[iGenParticle].status() << " # mothers: " << genCandidate->numberOfMothers() << std::endl;
+   //    FindMother(genCandidate,1);
+   //    //for (size_t iMother=0; iMother<genCandidate->numberOfMothers(); iMother++){
+   //    //  std::cout << "   mother: " << genCandidate->mother(iMother)->pdgId() << std::endl;
+   //    //}
+   // 
+   //  }
+   //}
+
+   //auto BDaughterVector = BDaughters(genHandle_);
+
+   if (!isZmumuSignal_ && !isBmumu_) // background ttbar
      decayMode = ttbarDecayMode( genHandle_ );
    h_ttbarDecayMode_->Fill( decayMode );
    
@@ -247,13 +337,31 @@ MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
    iEvent.getByToken(pfCandToken_, pfCandHandle_);
    auto muons = *muonsHandle_.product();
    bool hasGoodMuon = false;
+   //bool MatchBcand = false;
+   //bool m_inv_match = false;
+   double pT_max_pos = 0;
+   double pT_max_neg = 0;
+   reco::Muon mu1;
+   reco::Muon mu2;
+   
    nPromptMuons = 0;
    nNonPromptMuons = 0;
-
+   //std::cout << "# muons: " <<  muons.size() << std::endl;
    for(unsigned iMuon = 0; iMuon < muons.size(); ++iMuon)   {
      auto muon = muons.at(iMuon);
-     
      if ( !isGoodMuon( muon, genHandle_, genJetHandle_, genPV )) continue;
+     //std::cout << "muon: " << muon.pt() << " charge: " << muon.charge() << std::endl;
+     if (isBmumu_){
+       if ((muon.charge()==1) && (muon.pt()>pT_max_pos)){
+         pT_max_pos = muon.pt();
+         mu1 = muon;
+       }
+       if ((muon.charge()==-1) && (muon.pt()>pT_max_neg)){
+         pT_max_neg = muon.pt();
+         mu2 = muon;
+       }
+     }
+
      h_event_nPromptMuons_->Fill( nPromptMuons ) ;
      h_event_nNonPromptMuons_->Fill( nNonPromptMuons ) ;
      h_muon_pT->Fill(muon.pt());     
@@ -262,7 +370,8 @@ MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
      float pfRelIso03 = getMuonPFRelIso( muon );
      // ** B. "TDR-like" isolation using PFCandidates
      std::vector<float> pfCandIso03 = {0, 0, 0, 0}; // 0th: nominal isolation, 1st: no dxy cut, 2nd: nominal + 3sigma timing cut, 3rd: no dxy + 3sigma timing cut
-     int nPFCandidatesInCone = getMuonPFCandIso( muon, pfCandHandle_, genPV, pfCandIso03, trackFastSimTimeValueMap, trackFastSimTimeErrValueMap, 0.040, n_evt );
+     //int nPFCandidatesInCone = getMuonPFCandIso( muon, pfCandHandle_, genPV, pfCandIso03, trackFastSimTimeValueMap, trackFastSimTimeErrValueMap, 0.040, n_evt );
+     getMuonPFCandIso( muon, pfCandHandle_, genPV, pfCandIso03, trackFastSimTimeValueMap, trackFastSimTimeErrValueMap, 0.040, n_evt );
      //if (nPFCandidatesInCone == 0) continue;      // FIXME: come up with way to skip filling if pfCand sum is 0 --> this may be what causes slightly higher inefficiency
 
 
@@ -274,7 +383,7 @@ MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
      evInfo->muon_pfCand_noDxy.push_back(pfCandIso03.at(1));
      evInfo->muon_pfCand_dt.push_back(pfCandIso03.at(2));
      evInfo->muon_pfCand_noDxy_dt.push_back(pfCandIso03.at(3));
-     std::cout << "nevt: " << n_evt << " eta: " << muon.eta() << " pt: " << muon.pt() << " iso: " << pfCandIso03.at(1) << " isodt: " << pfCandIso03.at(3) << std::endl;
+     //std::cout << "nevt: " << n_evt << " eta: " << muon.eta() << " pt: " << muon.pt() << " iso: " << pfCandIso03.at(1) << " isodt: " << pfCandIso03.at(3) << std::endl;
      if ( fabs(muon.eta()) < 1.5){
        h_muon_pfRelIso03_BTL_->Fill( pfRelIso03 );
        //if ( pfCandIso03>=0 )
@@ -295,7 +404,202 @@ MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
        hasGoodMuon = true;
    }
 
-   if (hasGoodMuon)
+   if(isBmumu_){
+     if( (mu1.charge()==0) || (mu2.charge()==0) )  return;
+     h_event_cutflow_->Fill("two opposite charged Muons",1);
+     //calculate dca between leading and sub-leading opposite charged muons
+     double dca = 0;
+     GlobalPoint cp; //crossing point of two transient tracks
+     std::pair<GlobalPoint,GlobalPoint> pts;
+     reco::TrackRef tk1 = mu1.track();
+     reco::TrackRef tk2 = mu2.track();
+     //std::cout << "tracks: " << tk1->referencePoint() << " " << tk2->referencePoint() << std::endl;
+     TransientTrack mu1TT(*tk1, &(*bFieldHandle));
+     TransientTrack mu2TT(*tk2, &(*bFieldHandle));
+
+     // ***************** vertex selection ***************************
+     // refit the secondary vertex
+     float mu_mass = 0.1057;
+     float mu_mass_sigma = 4E-9f;
+     KinematicParticleFactoryFromTransientTrack pFactory;
+     vector<RefCountedKinematicParticle> kinParticles; //the container that contains the two muons(daughter of B meson)
+     kinParticles.push_back(pFactory.particle(mu1TT,mu_mass,0.0f,0.0f,mu_mass_sigma));
+     kinParticles.push_back(pFactory.particle(mu2TT,mu_mass,0.0f,0.0f,mu_mass_sigma));
+     RefCountedKinematicTree kinTree;
+     KinematicParticleVertexFitter kpvFitter;
+     kinTree = kpvFitter.fit(kinParticles); // do the fit to find the secondary vertex
+     RefCountedKinematicParticle B_kinPart = kinTree->currentParticle();
+
+     AnalyticalImpactPointExtrapolator extrapolator(&(*bFieldHandle));
+     double minDist = 999;
+     // refit the PV using tracks but exclude the muons tracks because they should come from the secondary vertex
+     for(size_t i = 0; i< vertex3DHandle_->size(); ++i){
+       std::cout << "3D vtx: " << vertex3DHandle_->size() << std::endl;
+       const auto& vtx = (*vertex3DHandle_)[i];
+       std::pair<bool,Measurement1D> DecayL;
+       AdaptiveVertexFitter avf;
+       vector<TransientTrack> vrtxRefit;
+       //std::cout << "Begin looping over all tracks: " << vtx.tracksSize() << std::endl;
+       for (vector<TrackBaseRef>::const_iterator tIt=vtx.tracks_begin();tIt!=vtx.tracks_end();++tIt){
+         TrackRef tref = tIt->castTo<TrackRef>();
+         //std::cout << " given track: " << tref->charge() << std::endl;
+         if( (tref==tk1) || (tref==tk2) ){
+           //std::cout << "Found the same muon track :)" << std::endl;
+           //std::cout << "Found the same muon track :)" << std::endl;
+           continue;
+         }
+         //std::cout << "--not the muon track" << std::endl;
+         TransientTrack trkTT(*tref, &(*bFieldHandle));
+         vrtxRefit.push_back(trkTT);
+       }
+       if (vrtxRefit.size()<5) continue;
+       //std::cout << "vtx has more than 5 tracks" << std::endl;
+       TransientVertex newVtx;
+       newVtx = avf.vertex(vrtxRefit);
+       newVtx = avf.vertex(vrtxRefit,beamSpot);
+       if (!newVtx.isValid()) continue;
+       //std::cout << "refit succeeded" << std::endl;
+       Vertex rePV = reco::Vertex(newVtx); //refitted PV
+       //std::cout << "transfer to vtx" << std::endl;
+       TrajectoryStateOnSurface tsos = extrapolator.extrapolate(B_kinPart->currentState().freeTrajectoryState(), RecoVertex::convertPos(rePV.position()));
+       //std::cout << "set up tsos" << std::endl;
+       DecayL = IPTools::signedDecayLength3D(tsos, GlobalVector(0,0,1), rePV);
+       //std::cout << "calc decay length" << std::endl;
+       if (fabs(DecayL.second.value()) < minDist ){
+         minDist = fabs(DecayL.second.value());
+         vertex3D = rePV;
+       }
+     }
+
+     minDist = 999;
+     for(size_t i = 0; i< vertex4DHandle_->size(); ++i){
+       std::cout << "4D vtx: " << vertex4DHandle_->size() << std::endl;
+       const auto& vtx = (*vertex4DHandle_)[i];
+       std::pair<bool,Measurement1D> DecayL;
+       AdaptiveVertexFitter avf;
+       vector<TransientTrack> vrtxRefit;
+       for (vector<TrackBaseRef>::const_iterator tIt=vtx.tracks_begin();tIt!=vtx.tracks_end();++tIt){
+         TrackRef tref = tIt->castTo<TrackRef>();
+         if( (tref==tk1) || (tref==tk2) ){
+           std::cout << "Found the same muon track :)" << std::endl;
+           continue;
+         }
+         TransientTrack trkTT(*tref, &(*bFieldHandle));
+         vrtxRefit.push_back(trkTT);
+       }
+       if (vrtxRefit.size()<5) continue;
+       TransientVertex newVtx;
+       newVtx = avf.vertex(vrtxRefit);
+       if (!newVtx.isValid()) continue;
+       Vertex rePV = reco::Vertex(newVtx); //refitted PV
+       TrajectoryStateOnSurface tsos = extrapolator.extrapolate(B_kinPart->currentState().freeTrajectoryState(), RecoVertex::convertPos(rePV.position()));
+       DecayL = IPTools::signedDecayLength3D(tsos, GlobalVector(0,0,1), rePV);
+       if (fabs(DecayL.second.value()) < minDist ){
+         minDist = fabs(DecayL.second.value());
+         vertex4D = rePV;
+       }
+     }
+
+     if(vertex4D.isFake())
+       return;
+     h_event_cutflow_->Fill("4D vtx not fake", 1);
+     if (vertex3D.isFake())
+       return;
+     h_event_cutflow_->Fill("3D vtx not fake", 1); 
+     
+     if (fabs(vertex4D.z()-genPV->position().z()) > 0.01 )
+       return;
+     h_event_cutflow_->Fill("dz(4D vtx,genPV)<0.01cm", 1);
+     
+     if (fabs(vertex3D.z()-genPV->position().z()) > 0.01 )
+       return;
+     h_event_cutflow_->Fill("dz(3D vtx,genPV)<0.01cm", 1);
+
+     TrajectoryStateClosestToPoint mu1TS = mu1TT.impactPointTSCP();
+     TrajectoryStateClosestToPoint mu2TS = mu2TT.impactPointTSCP();
+     if (mu1TS.isValid() && mu2TS.isValid()) {
+       ClosestApproachInRPhi cApp;
+       cApp.calculate(mu1TS.theState(), mu2TS.theState());
+       if(cApp.status()){
+         dca = cApp.distance();
+         //pts = cApp.points();
+         //std::cout << "cAPP: " << cApp.crossingPoint().x() << " " << cApp.crossingPoint().y() << " " << cApp.crossingPoint().z() << " " << cApp.distance() << std::endl;
+       }
+       else{
+         dca = 999;
+       }
+     }
+     else{
+       dca = 999;
+     }
+     //std::cout << "dca: " << dca << std::endl;
+     if(dca>0.08)  return;
+     h_event_cutflow_->Fill("dca<0.08cm",1);
+     TLorentzVector p1;
+     TLorentzVector p2;
+     TLorentzVector ptotal;
+     p1.SetPtEtaPhiE(mu1.pt(),mu1.eta(),mu1.phi(),mu1.energy());
+     p2.SetPtEtaPhiE(mu2.pt(),mu2.eta(),mu2.phi(),mu2.energy());
+     ptotal = p1+p2;
+     double m_inv = ptotal.M();
+     if ((m_inv < 4.8) || (m_inv > 6.0))  return;
+     h_event_cutflow_->Fill("4.8<m_inv<6.0",1);
+
+     //B2MuMu isolation cutflows
+     double IsoCut[3] = {0.1545,0.0875,0.0525};
+     double IsoCut_200PU[3] = {0.2925,0.1855,0.1365};
+     double IsoCut_MTD[3] = {0.1545,0.0875,0.0515};
+     double IsoCut_200PU_MTD[3] = {0.2315,0.1395,0.0985};
+     TString CutName[3] = {"95%WP(iso<0.1545)","90%WP(iso<0.0875)","85%WP(iso<0.0525)"};
+     TString CutName_200PU[3] = {"95%WP(iso<0.2925)(PU)","90%WP(iso<0.1855)(PU)","85%WP(iso<0.1365)(PU)"};
+     TString CutName_MTD[3] = {"95%WP(iso<0.1545)(MTD)","90%WP(iso<0.0875)(MTD)","85%WP(iso<0.0515)(MTD)"};
+     TString CutName_200PU_MTD[3] = {"95%WP(iso<0.2315)(PU MTD)","90%WP(iso<0.1395)(PU MTD)","85%WP(iso<0.0985)(PU MTD)"};
+     std::vector<float> mu1_Iso = {0,0,0,0};
+     std::vector<float> mu2_Iso = {0,0,0,0};
+     getMuonPFCandIso( mu1, pfCandHandle_, genPV, mu1_Iso, trackFastSimTimeValueMap, trackFastSimTimeErrValueMap, 0.040, n_evt );
+     getMuonPFCandIso( mu2, pfCandHandle_, genPV, mu2_Iso, trackFastSimTimeValueMap, trackFastSimTimeErrValueMap, 0.040, n_evt );
+     //std::cout << "anti-mu: pt: " << mu1.pt() << " charge: " << mu1.charge() << std::endl;
+     //std::cout << "Isolation: ";
+     //for(auto isola:mu1_Iso){
+     //  std::cout << isola;
+     //}
+     //std::cout << std::endl;
+     //std::cout << "mu: pt: " << mu2.pt() << " charge: " << mu2.charge() << std::endl;
+     //std::cout << "Isolation: ";
+     //for(auto isola:mu2_Iso){
+     //  std::cout << isola;
+     //}
+     //std::cout << std::endl;
+
+
+     for(int iCut=0;iCut<3;++iCut){
+       if( (mu1_Iso.at(1)<IsoCut[iCut]) && (mu2_Iso.at(1)<IsoCut[iCut]) ){
+         h_event_cutflow_->Fill(CutName[iCut],1);
+       }
+     }
+     for(int iCut=0;iCut<3;++iCut){
+       if( (mu1_Iso.at(3)<IsoCut_MTD[iCut]) && (mu2_Iso.at(3)<IsoCut_MTD[iCut]) ){
+         h_event_cutflow_->Fill(CutName_MTD[iCut],1);
+       }
+     }
+     for(int iCut=0;iCut<3;++iCut){
+       if( (mu1_Iso.at(1)<IsoCut_200PU[iCut]) && (mu2_Iso.at(1)<IsoCut_200PU[iCut]) ){
+         h_event_cutflow_->Fill(CutName_200PU[iCut],1);
+       }
+     }
+     for(int iCut=0;iCut<3;++iCut){
+       if( (mu1_Iso.at(3)<IsoCut_200PU_MTD[iCut]) && (mu2_Iso.at(3)<IsoCut_200PU_MTD[iCut]) ){
+         h_event_cutflow_->Fill(CutName_200PU_MTD[iCut],1);
+       }
+     }
+
+   }
+
+  // if (MatchBcand)
+  //   h_event_cutflow_->Fill("dca<0.08cm",1);
+  // if (m_inv_match)
+  //   h_event_cutflow_->Fill("4.8<m_inv<6.0",1);
+   if ((hasGoodMuon) && (!isBmumu_))
      h_event_cutflow_->Fill(">= 1 Good Muon", 1);
 
    eventTree->Fill();
@@ -323,8 +627,9 @@ MuonIsolationAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& 
 
 
 // ------------ method called once each job just before starting event loop  ------------
-void
-MuonIsolationAnalyzer::beginJob()
+//void
+//MuonIsolationAnalyzer::beginJob(const edm::Run& iRun, const edm::EventSetup& iSetup)
+void MuonIsolationAnalyzer::beginJob()
 {
   edm::Service<TFileService> fileService;
   if(!fileService) throw edm::Exception(edm::errors::Configuration, "TFileService is not registered in cfg file");
@@ -368,12 +673,29 @@ MuonIsolationAnalyzer::beginJob()
   h_muon_numCand = fileService->make<TH1F>("h_muon_numCand", "h_muon_numCand", 50, 0, 50.0);
 
   h_pfCandidate_cutflow_ = fileService->make<TH1D>("h_pfCandidate_cutflow", "h_pfCandidate_cutflow", 7, 0, 7);
+  h_pfCandidate_cutflow_4_ = fileService->make<TH1D>("h_pfCandidate_cutflow_4", "h_pfCandidate_cutflow_4", 7, 0, 7);
+  h_pfCandidate_cutflow_20_ = fileService->make<TH1D>("h_pfCandidate_cutflow_20", "h_pfCandidate_cutflow_20", 7, 0, 7);
 
 }
 
 // ------------ method called once each job just after ending the event loop  ------------
 void
 MuonIsolationAnalyzer::endJob()
+{
+}
+
+void
+MuonIsolationAnalyzer::beginRun(edm::Run const& iRun, edm::EventSetup const& iSetup)
+{
+  bool changed(true);
+  if (!(hltConfig_.init(iRun,iSetup,processName_,changed))){
+    std::cout << "Warning, didn't find trigger process HLT,\t" << processName_ << std::endl;
+    return;
+  }
+}
+
+void
+MuonIsolationAnalyzer::endRun(edm::Run const& iRun, edm::EventSetup const& iSetup)
 {
 }
 
@@ -402,12 +724,20 @@ int MuonIsolationAnalyzer::getMuonPFCandIso(const reco::Muon& iMuon, edm::Handle
      auto pfCandidate = pfCandidates.at(iPFCand);
      h_muon_pfCandpT->Fill(pfCandidate.pt());
      h_pfCandidate_cutflow_->Fill("PF Candidate", 1);
+     if(iMuon.pt()>4 && iMuon.pt()<20)
+       h_pfCandidate_cutflow_4_->Fill("PF Candidate", 1);
+     if(iMuon.pt()>20)
+       h_pfCandidate_cutflow_20_->Fill("PF Candidate", 1);
      thisCandPassesDxy = false;
 
      // skip neutrals
      if (pfCandidate.charge()==0) 
        continue;
      h_pfCandidate_cutflow_->Fill("Charge != 0", 1);
+     if(iMuon.pt()>4 && iMuon.pt()<20)
+       h_pfCandidate_cutflow_4_->Fill("Charge !=0", 1);
+     if(iMuon.pt()>20)
+       h_pfCandidate_cutflow_20_->Fill("Charge !=0", 1);
 
      reco::TrackRef pfTrack = pfCandidate.trackRef();
      
@@ -426,28 +756,27 @@ int MuonIsolationAnalyzer::getMuonPFCandIso(const reco::Muon& iMuon, edm::Handle
      if ( std::abs(pfCandidate.eta()) < 1.48 && pfCandidate.pt() < 0.7 ) continue;
      if ( std::abs(pfCandidate.eta()) > 1.48 && pfCandidate.pt() < 0.4 ) continue;
      // calculate dxy/dz 
-     float dzsim  = std::abs( pfTrack->vz() - genPV->position().z() ); 
+     float dz_sim  = std::abs( pfTrack->vz() - genPV->position().z() ); 
      float dxy_sim = sqrt ( pow(pfTrack->vx() - genPV->position().x(),2) + pow(pfTrack->vy() - genPV->position().y(),2) ); 
-     float dz4D = pfTrack->dz(vertex4D.position());
-     float dz3D = std::abs( pfTrack->dz(vertex3D.position()) );
-     float dzmu = std::abs( pfTrack->dz(vertex4D.position()) - iMuon.track()->dz(vertex4D.position()) );
-     float dxy4D = std::abs( pfTrack->dxy( vertex4D.position() ));
-     float dz_sim = fabs(dz4D + vertex4D.z() - genPV->position().z());
+     if (!isBmumu_){
+       float dz4D = pfTrack->dz(vertex4D.position());
+       float dz3D = std::abs( pfTrack->dz(vertex3D.position()) );
+       float dzmu = std::abs( pfTrack->dz(vertex4D.position()) - iMuon.track()->dz(vertex4D.position()) );
+       //float dxy4D = std::abs( pfTrack->dxy( vertex4D.position() ));
+       //float dz_sim = fabs(dz4D + vertex4D.z() - genPV->position().z());
+       if ( ( dz_sim < 1.0 || (std::abs(dz4D) < 1.0) || dz3D < 1.0 || dzmu < 1.0) )
+       {
+         h_pfCandidate_cutflow_->Fill("loose dz", 1);
+       }
+       else
+         continue;
+       //h_pfCandidate_cutflow_->Fill("loose dz", 1); 
+     }
 
      float dr = deltaR(iMuon.eta(),iMuon.phi(),pfCandidate.eta(),pfCandidate.phi());
      if (!(dr>0 && dr<isoCone))  continue;
-     //if ( !(passDeltaR( isoCone, iMuon.eta(), iMuon.phi(), pfCandidate.eta(), pfCandidate.phi())) ) continue;
      h_pfCandidate_cutflow_->Fill("dr", 1);
 
-     if ( ( dzsim < 1.0 || (std::abs(dz4D) < 1.0) || dz3D < 1.0 || dzmu < 1.0) )
-     {
-       h_pfCandidate_cutflow_->Fill("loose dz", 1);
-     }
-     else
-       continue;
-     //h_pfCandidate_cutflow_->Fill("loose dz", 1); 
-
-     
      if ( dxy_sim < dxy_pfCandVertex ){
        thisCandPassesDxy = true;
        //h_pfCandidate_cutflow_->Fill("dxy < 0.02", 1);
@@ -469,6 +798,10 @@ int MuonIsolationAnalyzer::getMuonPFCandIso(const reco::Muon& iMuon, edm::Handle
        
      }
      h_pfCandidate_cutflow_->Fill("BTL pt", 1);
+     if(iMuon.pt()>4 && iMuon.pt()<20)
+       h_pfCandidate_cutflow_4_->Fill("BTL pt", 1);
+     if(iMuon.pt()>20)
+       h_pfCandidate_cutflow_20_->Fill("BTL pt", 1);
      //else if ( fabs(track->eta())>1.5 && fabs(track->eta())<2.8) { // ETL acceptance
      //else if ( fabs(pfCandidate.eta())>1.5 && fabs(pfCandidate.eta())<2.8) { // ETL acceptance
      //else if ( fabs(pfCandidate.eta())>1.48 && fabs(pfCandidate.eta())<2.8) { // ETL acceptance
@@ -478,14 +811,14 @@ int MuonIsolationAnalyzer::getMuonPFCandIso(const reco::Muon& iMuon, edm::Handle
      }
      h_pfCandidate_cutflow_->Fill("ETL pt", 1);
      
-     if ( dxy4D >= 9999. )
-       continue;
-     h_pfCandidate_cutflow_->Fill("dxy", 1);
-
      if ( dz_sim >= dz_pfCandVertex )
        continue;
      if ( fabs(iMuon.eta()) < 1.5 ){
        h_pfCandidate_cutflow_->Fill("dz", 1);
+       if(iMuon.pt()>4 && iMuon.pt()<20)
+         h_pfCandidate_cutflow_4_->Fill("dz", 1);
+       if(iMuon.pt()>20)
+         h_pfCandidate_cutflow_20_->Fill("dz", 1);
      }
 
      // sum candidates in cone
@@ -495,8 +828,6 @@ int MuonIsolationAnalyzer::getMuonPFCandIso(const reco::Muon& iMuon, edm::Handle
      if ( timeResolution!=-1) { // timeResolution either passed by user (!=-1) or defaul (==-1, don't use)
        double pfcandtimeFastSim = (*trackFastSimTimeValueMap)[pfTrack];
 	     double pfcandtimeErrFastSim = (*trackFastSimTimeErrValueMap)[pfTrack];
-       //TRandom *gRandom = new TRandom();
-       //std::cout << "1: " << gRandom->GetSeed() << " 2: " << gRandom2->GetSeed() << " 3: " << gRandom3->GetSeed() << std::endl;
        double targetTimeResol = timeResolution;
 	     //double defaultTimeResol  = 0.;
        double defaultTimeResolFastSim  = pfcandtimeErrFastSim;
@@ -521,30 +852,19 @@ int MuonIsolationAnalyzer::getMuonPFCandIso(const reco::Muon& iMuon, edm::Handle
 	     bool keepTrack = true;
 
 	     // introduce inefficiency loss to mirror more realistic detector behaviour, [BBT 08-23-19: COMMENT OUT FOR NOW]
-	     gRandom2->SetSeed(n_evt);
        double rndEff = gRandom2->Uniform(0.,1.);
-       //double rndEff = 0;
-       //std::cout << "eff: " << rndEff << std::endl;
-       //std::cout << "KeepTrack: " << (int) keepTrack << std::endl;
 	     if ( std::abs(pfCandidate.eta()) < 1.5 && rndEff > btlEfficiency ) keepTrack = false; 
 	     if ( std::abs(pfCandidate.eta()) > 1.5 && rndEff > etlEfficiency ) keepTrack = false; 
 
        if ( pfcandtimeErrFastSim !=-1 ){
-         //gRandom->SetSeed(n_evt);
          double rndFastSim = gRandom->Gaus(0., extra_resol_FastSim);
-         //double rndFastSim = 0;
          pfCandidateTime = pfcandtimeFastSim + rndFastSim;
-         //std::cout <<"nevt: " << n_evt << " rnd: " << rndFastSim << " time: " << pfCandidateTime << " resol: " << extra_resol_FastSim << std::endl;
-         //std::cout << "rndFastSim = " << rndFastSim;
        }
-	     //if ((keepTrack) && (pfCandidateTime!=-999) ) {
 	     if(pfCandidateTime!=-999) {
          // -- extra smearing to emulate different time resolution
          double extra_smearing = sqrt((targetTimeResol*targetTimeResol - 0.035*0.035));
-         //gRandom3->SetSeed(n_evt);
          pfCandidateTime = pfCandidateTime + gRandom3->Gaus(0,extra_smearing);
          //dtsim = std::abs(pfCandidateTime - genPV->position().t()*1000000000.);
-	       //cout << "  target time resol = "<< targetTimeResol << "  extra_resol = "<< extra_resol_FastSim << "  extra rnd = " << extra_smearing << "  pfCandidate time = " << pfCandidateTime << "  dtsim = " << dtsim << endl;
 	     }
        dtsim = std::abs(pfCandidateTime - genPV->position().t()*1000000000.);
 	     //else
@@ -563,6 +883,10 @@ int MuonIsolationAnalyzer::getMuonPFCandIso(const reco::Muon& iMuon, edm::Handle
        if (!(keepTrack && pfCandidateTime!=-999 && dtsim > 3.*targetTimeResol)){
          if ( fabs(iMuon.eta()) < 1.5 ){
            h_pfCandidate_cutflow_->Fill("time", 1);
+           if(iMuon.pt()>4 && iMuon.pt()<20)
+             h_pfCandidate_cutflow_4_->Fill("time", 1);
+           if(iMuon.pt()>20)
+             h_pfCandidate_cutflow_20_->Fill("time", 1);
          }
 	       // ** 2. Nominal + 3sigma cut on timing
 	       if(thisCandPassesDxy)
@@ -849,38 +1173,39 @@ int MuonIsolationAnalyzer::ttbarDecayMode(edm::Handle<std::vector<reco::GenParti
   return decayMode;
 }
 
-bool MuonIsolationAnalyzer::isGoodMuon(const reco::Muon& iMuon, edm::Handle<std::vector<reco::GenParticle> >& genHandle, edm::Handle<std::vector<reco::GenJet> >& genJetHandle, const SimVertex *genPV) const
+bool MuonIsolationAnalyzer::isGoodMuon(const reco::Muon& iMuon, edm::Handle<std::vector<reco::GenParticle> >& genHandle, edm::Handle<std::vector<reco::GenJet> >& genJetHandle, const SimVertex *genPV, bool ForMatchUse) const
 {
-  h_muon_cutflow_->Fill("All Muons", 1);
+  if (!ForMatchUse)
+    h_muon_cutflow_->Fill("All Muons", 1);
   
   // *** just check to make sure muon track available
-  //if (iMuon.pt() < 5.)
-  //  return false;
   if (iMuon.track().isNull()) 
     return false;
-  h_muon_cutflow_->Fill("track", 1);
+  if (!ForMatchUse)
+    h_muon_cutflow_->Fill("muon has track", 1);
   
-  // *** 0. pT > 20 GeV ---> may need to change this for Bs->mumu studies, but keep for now to reproduce TDR results
+  // *** 0. pT > 20 GeV ---> use 4GeV for Bs->mumu studies, but keep for now to reproduce TDR results
+  if (iMuon.pt() < 4.)
+    return false;
+  h_muon_cutflow_->Fill("pT > 4", 1);
   //if (iMuon.pt() < 20.)
   //  return false;
   //h_muon_cutflow_->Fill("pT > 20", 1);
 
-  if (iMuon.pt() > 9999.)
-    return false;
-  h_muon_cutflow_->Fill("pT < 9999", 1);
-
   // *** 2. Loose ID
-  //if ( iMuon.passed('CutBasedIdLoose'))//userFloat("CutBasedIdLoose") ) // CutBasedIdLoose, MvaLoose, others?
   if ( !(muon::isLooseMuon(iMuon)) )
     return false;
-  h_muon_cutflow_->Fill("Loose ID", 1);
+  if (!ForMatchUse)
+    h_muon_cutflow_->Fill("Loose ID", 1);
   
   // *** 1. |eta| < 2.4
   //if ( fabs(iMuon.eta()) > 2.4 )
   //  return false;
   //h_muon_cutflow_->Fill("|eta| < 2.4", 1);
-  
-
+  if (isBmumu_ && fabs(iMuon.eta()) >1.4 )
+    return false;
+  if (isBmumu_ && !ForMatchUse)
+    h_muon_cutflow_->Fill("eta<1.4", 1);
 
   reco::TrackRef muonTrack = iMuon.track();
   float dz_sim  = std::abs( muonTrack->vz() - genPV->position().z() ); 
@@ -889,27 +1214,26 @@ bool MuonIsolationAnalyzer::isGoodMuon(const reco::Muon& iMuon, edm::Handle<std:
   float dz_4D = std::abs( muonTrack->dz(vertex4D.position()));
   float dxy_4D = std::abs( muonTrack->dxy(vertex4D.position()));
   // some plots
-  if (fabs(iMuon.eta())<1.5){
+  if ((!ForMatchUse) && (fabs(iMuon.eta()))<1.5){
     h_muon_dxy_BTL_->Fill( dxy_sim );
     h_muon_dz_BTL_->Fill( dz_sim );
   }
 
-  // *** 4. z0 cut
-  if ( dz_4D > dz_muonVertex )
-    return false;
-  h_muon_cutflow_->Fill("z0 < 0.5 cm", 1);
-  
-  // *** 3. d0 cut
-  if ( dxy_4D > dxy_muonVertex )
-    return false;
-  h_muon_cutflow_->Fill("d0 < 0.2 cm", 1);
-  
+  if (!isBmumu_){
+    // *** 4. z0 cut
+    if ( dz_4D > dz_muonVertex )
+      return false;
+    if (!ForMatchUse)
+      h_muon_cutflow_->Fill("dz(4D vtx,muon) < 0.5 cm", 1);
+    
+    // *** 3. d0 cut
+    if ( dxy_4D > dxy_muonVertex )
+      return false;
+    if (!ForMatchUse)
+      h_muon_cutflow_->Fill("dxy(4D vtx,muon) < 0.2 cm", 1);
+  }
   // end
 
-  if (vertex4D.isFake() || vertex3D.isFake() )
-    return false;
-  h_muon_cutflow_->Fill("nofake", 1);
-  
   // calculate some booleans
   bool recoMuonMatchedToPromptTruth = isPromptMuon(iMuon, genHandle);
   bool recoMuonMatchedToGenJet      = isMatchedToGenJet(iMuon, genJetHandle);
@@ -920,23 +1244,33 @@ bool MuonIsolationAnalyzer::isGoodMuon(const reco::Muon& iMuon, edm::Handle<std:
 
     if (!recoMuonMatchedToPromptTruth)
       return false;
-    h_muon_cutflow_->Fill("Signal Prompt Muon", 1);
+    if (!ForMatchUse)
+      h_muon_cutflow_->Fill("Signal Prompt Muon", 1);
   }
   // *** 5B. reject prompt muons if ttbar background
-  else if (!isZmumuSignal_) {
+  else if ((!isZmumuSignal_) && (!isBmumu_) ) {
 
-    // ** . Muon is "good" non-prompt if !truthMatched && genJetMatched && !tauMatched
+    // *** 5B-1. Muon is "good" non-prompt if !truthMatched && genJetMatched && !tauMatched
     if ( !recoMuonMatchedToPromptTruth && recoMuonMatchedToGenJet && !recoMuonFromTau) {
-      h_muon_cutflow_->Fill("Non-prompt Bkg Muon", 1);
+      if (!ForMatchUse)
+        h_muon_cutflow_->Fill("Non-prompt Bkg Muon", 1);
     }
     else 
       return false;
   }
 
-  if (fabs(vertex4D.z()-genPV->position().z()) > 0.01 ) return false;
-  h_muon_cutflow_->Fill("4D_gen", 1);
-  if (fabs(vertex3D.z()-genPV->position().z()) > 0.01 ) return false;
-  h_muon_cutflow_->Fill("3D_gen", 1);
+  // *** 5C. accept only muons matched with generated muons from Bs/d decay
+  if (isBmumu_){
+    auto BDaughterVector = BDaughters(genHandle);
+    bool isMtahcedToDaughter = isMatchedToBMMDaughter(iMuon, BDaughterVector);
+    if (isMtahcedToDaughter){
+      std::cout << "muon matched :)" << std::endl;
+      if (!ForMatchUse)
+        h_muon_cutflow_->Fill("Muon from B", 1);
+    }
+    else
+      return false;
+  }
 
   return true;
 

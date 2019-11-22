@@ -63,7 +63,7 @@ else:
 # *** 1. Create .tar of directory and store in personal EOS
 print "##########     Tarring workdir     ##########"
 tarball_name = "{0}.tar.gz".format(args.outputDir)
-os.system("cd /uscms_data/d3/ali/BstoMuMu/space/CMSSW_10_4_0_mtd5/src; tar -cvzf {0} BsToMuMuAnalysis --exclude '*10*' --exclude '*09*' --exclude '*0901*' --exclude '.git' --exclude 'test_*' --exclude 'submitOneFile_' --exclude '*.tar.gz' --exclude '*-19_*' --exclude '*2019' --exclude 'pass*' --exclude '.SCRAM*' --exclude 'tmp' --exclude 'lib' --exclude 'config' --exclude 'external' --exclude '*notes_*.txt*' --exclude '08-*19' --exclude '*.root'; cd /uscms_data/d3/ali/BstoMuMu/space/CMSSW_10_4_0_mtd5/src/BsToMuMuAnalysis; mv /uscms_data/d3/ali/BstoMuMu/space/CMSSW_10_4_0_mtd5/src/{0} .".format(tarball_name))
+os.system("cd /uscms_data/d3/ali/BstoMuMu/space/CMSSW_10_6_0/src; tar -cvzf {0} BsToMuMuAnalysis --exclude '*11*' --exclude '*10*' --exclude '*09*' --exclude '*0901*' --exclude '.git' --exclude 'test_*' --exclude 'submitOneFile_' --exclude '*.tar.gz' --exclude '*-19_*' --exclude '*2019' --exclude 'pass*' --exclude '.SCRAM*' --exclude 'tmp' --exclude 'lib' --exclude 'config' --exclude 'external' --exclude '*notes_*.txt*' --exclude '08-*19' --exclude '*.root'; cd /uscms_data/d3/ali/BstoMuMu/space/CMSSW_10_6_0/src/BsToMuMuAnalysis; mv /uscms_data/d3/ali/BstoMuMu/space/CMSSW_10_6_0/src/{0} .".format(tarball_name))
 if ( not os.path.exists("/eos/uscms/store/user/ali/{0}/".format(args.outputDir)) ):
     os.system("mkdir /eos/uscms/store/user/ali/{0}/".format(args.outputDir))
 
@@ -89,7 +89,15 @@ with open(args.inputTXTfile, 'r') as txtfile:
         lastFourFileIDs = '-'.join( [lastFour[len(lastFour)-9:len(lastFour)-5] for lastFour in filesForJob] ) # get and concatenate last four digits of filenames
         filelist = ','.join( filesForJob )
         jdl_filename = "submitOneFile_{0}_{1}.jdl".format(args.outputDir, lastFourFileIDs)
-        isZmumu = 'isZmumu' if 'zmumu' in args.inputTXTfile else 'isTTbar'
+        if ('bmumu' in args.inputTXTfile):
+          isZmumu = 'isBmumu'
+        elif ('zmumu' in args.inputTXTfile):
+          isZmumu = 'isZmumu'
+        else:
+          isZmumu = 'isTTbar'
+
+        #isBmumu = 'isBmumu' if 'bmumu' in args.inputTXTfile else ''
+        #isZmumu = 'isZmumu' if 'zmumu' in args.inputTXTfile else 'isTTbar'
         is200PU = 'is200PU' if '200PU' in args.inputTXTfile else 'is0PU'
         
 

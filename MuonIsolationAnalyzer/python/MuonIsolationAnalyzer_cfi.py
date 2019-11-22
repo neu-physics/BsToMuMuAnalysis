@@ -22,14 +22,23 @@ MuonIsolationAnalyzer = cms.EDAnalyzer('MuonIsolationAnalyzer',
                                        #treeName = cms.untracked.string("DumpHits"),
                                        #verbosity = cms.bool(False),
                                        isZmumuSignal = cms.bool(False),
+                                       isBmumu = cms.bool(False),
                                        #lastFourFileID = cms.tracked.string(""),
                                        #dumpRecHits = cms.bool(False)
                                        muonsTag = cms.untracked.InputTag("muons"),
                                        vertex3DTag = cms.untracked.InputTag("offlinePrimaryVertices"),
                                        vertex4DTag = cms.untracked.InputTag("offlinePrimaryVertices4D"),
                                        pfCandTag = cms.untracked.InputTag("particleFlow"),
-                                       TrackFastSimTimeValueMapTag = cms.InputTag("trackTimeValueMapProducer", "generalTracksConfigurableFlatResolutionModel", "RECO"),
-                                       TrackFastSimTimeErrValueMapTag = cms.InputTag("trackTimeValueMapProducer", "generalTracksConfigurableFlatResolutionModelResolution", "RECO"),
+                                       BSTag = cms.untracked.InputTag("offlineBeamSpot"),
+                                       #TrackFastSimTimeValueMapTag = cms.InputTag("trackTimeValueMapProducer", "generalTracksConfigurableFlatResolutionModel", "RECO"),
+                                       #TrackFastSimTimeErrValueMapTag = cms.InputTag("trackTimeValueMapProducer", "generalTracksConfigurableFlatResolutionModelResolution", "RECO"),
+                                       #TrackFastSimTimeValueMapTag = cms.InputTag("trackTimeValueMapProducer", "generalTracksConfigurableFlatResolutionModel", "HLT"),
+                                       #TrackFastSimTimeErrValueMapTag = cms.InputTag("trackTimeValueMapProducer", "generalTracksConfigurableFlatResolutionModelResolution", "HLT"),
+                                       TrackFastSimTimeValueMapTag = cms.InputTag("trackTimeValueMapProducer:generalTracksConfigurableFlatResolutionModel"),
+                                       TrackFastSimTimeErrValueMapTag = cms.InputTag("trackTimeValueMapProducer:generalTracksConfigurableFlatResolutionModelResolution"),
+                                       
                                        TrackTimeValueMapTag = cms.InputTag("tofPID", "t0", "PAT"),
-                                       TrackTimeErrValueMapTag = cms.InputTag("tofPID", "sigmat0", "PAT")
+                                       TrackTimeErrValueMapTag = cms.InputTag("tofPID", "sigmat0", "PAT"),
+                                       TriggerTag = cms.untracked.InputTag("TriggerResults", "", "HLT"),
+                                       processName = cms.untracked.string("HLT")
                                       )

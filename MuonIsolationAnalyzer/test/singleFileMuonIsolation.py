@@ -15,6 +15,7 @@ if len(sys.argv) != 5:
 
 # boolean for signal/background
 isZmumu = True if sys.argv[2] == 'isZmumu' else False  
+isBmumu = True if sys.argv[2] == 'isBmumu' else False
 # boolean for 0/200PU
 is200PU = True if sys.argv[3] == 'is200PU' else False 
 
@@ -42,6 +43,9 @@ nPU = ''
 if isZmumu:
     sample = 'zmumu'
     nPU = '_PU' if is200PU else ''
+elif isBmumu:
+    sample = 'bmumu'
+    nPU = '_PU' if is200PU else ''
 else:
     sample = 'ttbar'
     nPU = '_PU' if is200PU else ''
@@ -61,8 +65,14 @@ process.source = cms.Source("PoolSource",
 
 #process.muonIsoAnalyzer = cms.EDAnalyzer('MuonIsolationAnalyzer')
 process.load('BsToMuMuAnalysis.MuonIsolationAnalyzer.MuonIsolationAnalyzer_cfi')
+process.load("TrackingTools/TransientTrack/TransientTrackBuilder_cfi")
+process.load("Configuration.Geometry.GeometryIdeal_cff")
+process.load("Configuration.StandardSequences.MagneticField_cff")
+process.load('Configuration.StandardSequences.FrontierConditions_GlobalTag_cff')
+process.GlobalTag.globaltag = '103X_upgrade2023_realistic_v2'  # or some other global tag depending on your CMSSW release and sample. 
 muonIsoAnalyzer = process.MuonIsolationAnalyzer
 muonIsoAnalyzer.isZmumuSignal = isZmumu
+muonIsoAnalyzer.isBmumu = isBmumu
 
 print("name of fileID: {0}".format(lastFourFileIDs))
 process.TFileService = cms.Service("TFileService", fileName = cms.string("muonIsolation_output_{0}{1}_{2}.root".format(sample, nPU, lastFourFileIDs)) )
